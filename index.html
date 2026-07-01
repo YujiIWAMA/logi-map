@@ -1,0 +1,639 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>関連図ワークベンチ — 全体像をつなぐ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<style>
+  :root{
+    --paper:#f7f5ef; --ink:#23201b; --ink-soft:#6b6459;
+    --rule:#d8d2c4; --rule-soft:#e7e2d6;
+    --patient:#3d4a70; --patient-bg:#e9edf7;   /* 患者情報: この図の主体 */
+    --speech:#2f6f9f;  --speech-bg:#e3eef6;
+    --data:#3f8a5c;    --data-bg:#e2efe7;
+    --diag:#3a362f;    --diag-bg:#efece3;       /* 看護診断: 結論 */
+    --accent:#9a3b34;  --proposed:#9b8cc4; --edge:#5a5449;
+    --pes-e:#c15a2e;   --pes-s:#2e8b8b;   /* E=原因・関連因子 / S=症状・根拠データ */
+    --shadow:0 1px 2px rgba(35,32,27,.08),0 8px 24px rgba(35,32,27,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",-apple-system,sans-serif;
+    background:var(--paper);color:var(--ink);
+    display:grid;grid-template-rows:auto 1fr;height:100vh;overflow:hidden;}
+  header{border-bottom:1px solid var(--rule);padding:14px 22px;
+    display:flex;align-items:baseline;gap:18px;background:linear-gradient(var(--paper),#fbfaf6);}
+  header h1{font-size:19px;font-weight:700;letter-spacing:.04em;font-family:"Yu Mincho","Hiragino Mincho ProN",serif;}
+  header .sub{font-size:12.5px;color:var(--ink-soft)}
+  header .phase{margin-left:auto;display:flex;font-size:12px;border:1px solid var(--rule);border-radius:999px;overflow:hidden;}
+  header .phase span{padding:5px 14px;color:var(--ink-soft);cursor:pointer;user-select:none;transition:.12s}
+  header .phase span:hover{background:var(--rule-soft);color:var(--ink)}
+  header .phase span.on{background:var(--ink);color:var(--paper)}
+  header .phase span.on:hover{background:var(--ink);color:var(--paper)}
+
+  main{display:grid;grid-template-columns:300px 1fr 290px;height:100%;overflow:hidden}
+  .panel{overflow-y:auto;padding:18px 16px}
+  .panel.left{border-right:1px solid var(--rule);background:#fbfaf6}
+  .panel.right{border-left:1px solid var(--rule);background:#fbfaf6}
+  #cy{width:100%;height:100%;background:
+    radial-gradient(circle at 1px 1px,var(--rule-soft) 1px,transparent 0) 0 0/22px 22px,var(--paper);}
+  .stage{position:relative;overflow:hidden}
+
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px;font-weight:700;}
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+  .seg button{border:1px solid var(--rule);background:#fff;border-radius:7px;padding:8px 4px;font-size:11.5px;
+    cursor:pointer;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s;}
+  .seg button .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .seg button[data-t="patient"]{grid-column:1 / -1}
+  .seg button[data-t="patient"] .dot{background:var(--patient);border-radius:2px}
+  .seg button[data-t="speech"] .dot{background:var(--speech)}
+  .seg button[data-t="data"] .dot{background:var(--data)}
+  .seg button[data-t="diagnosis"] .dot{background:var(--diag-bg);border:3px double var(--diag);border-radius:2px}
+  .seg button.on{border-color:var(--ink);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
+  textarea,input[type=text]{width:100%;border:1px solid var(--rule);border-radius:7px;padding:9px 10px;
+    font:inherit;font-size:13px;background:#fff;resize:vertical;color:var(--ink);}
+  textarea:focus,input:focus{outline:2px solid var(--speech);outline-offset:-1px}
+  #patientInput input{margin-bottom:6px}
+  .addbtn{width:100%;margin-top:8px;background:var(--ink);color:var(--paper);border:none;border-radius:7px;
+    padding:10px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.04em;}
+  .addbtn:hover{background:#000}
+  .hint{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin-top:9px}
+  .divider{height:1px;background:var(--rule);margin:18px 0}
+
+  .line-note{font-size:11.5px;color:var(--ink-soft);line-height:1.7;background:#fff;border:1px solid var(--rule);border-radius:7px;padding:10px;margin-top:6px}
+  .line-note .row{display:flex;align-items:center;gap:8px;margin:3px 0}
+  .line-note svg{flex:none}
+
+  .propose-btn{width:100%;border:1px dashed var(--proposed);background:#f3f0f9;color:#5a4b86;border-radius:7px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;}
+  .propose-btn:hover{background:#ece7f5}
+  .propose-btn:disabled{opacity:.5;cursor:not-allowed}
+  .mode-note{font-size:11px;color:var(--ink-soft);background:#f3f0f9;border-radius:6px;padding:7px 9px;margin-top:8px;line-height:1.5;border:1px solid #e5def2}
+  .cand{border:1px solid var(--rule);border-left:3px solid var(--proposed);border-radius:7px;padding:10px;margin-bottom:9px;background:#fff;font-size:12.5px;}
+  .cand .rel{display:flex;align-items:center;gap:6px;margin-bottom:4px;line-height:1.4;flex-wrap:wrap}
+  .cand .rel b{color:var(--ink)}
+  .cand .arrow{color:var(--proposed);font-weight:700;font-size:11px}
+  .cand .why{color:var(--ink-soft);font-size:11.5px;line-height:1.5;margin:4px 0 8px}
+  .cand .src{display:inline-block;font-size:10px;padding:1px 7px;border-radius:999px;background:var(--rule-soft);color:var(--ink-soft);margin-bottom:6px;letter-spacing:.04em;}
+  .cand .src.llm{background:#efe9f8;color:#6a5a99}
+  .cand .kindtag{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid var(--rule);color:var(--ink-soft)}
+  .cand .acts{display:flex;gap:6px}
+  .cand .acts button{flex:1;border:1px solid var(--rule);border-radius:6px;padding:6px;font-size:12px;cursor:pointer;background:#fff;font-weight:600;}
+  .cand .acts .ok{border-color:var(--data);color:var(--data)} .cand .acts .ok:hover{background:var(--data-bg)}
+  .cand .acts .no{border-color:var(--accent);color:var(--accent)} .cand .acts .no:hover{background:#f6e6e4}
+
+  .stat{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+  .stat .n{font-size:20px;font-weight:700;font-family:"Yu Mincho",serif}
+  .stat .n.warn{color:var(--accent)}
+  .unlinked{background:#f6e6e4;border:1px solid #e3c4c0;border-radius:7px;padding:10px;margin-top:12px;font-size:12px;color:#7a2e28;line-height:1.5;}
+  .unlinked b{display:block;margin-bottom:5px}
+  .unlinked ul{list-style:none;margin-top:4px} .unlinked li{padding:2px 0} .unlinked li::before{content:"•  ";color:var(--accent)}
+
+  .diaglist{margin-top:8px}
+  .diagrow{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--rule);border-left:4px double var(--diag);border-radius:7px;padding:8px 9px;margin-bottom:7px;font-size:12.5px}
+  .diagrow .pri{font-family:"Yu Mincho",serif;font-weight:700;font-size:15px;color:var(--diag);flex:none;min-width:26px}
+  .diagrow .txt{flex:1;line-height:1.4}
+  .diagrow .mv{display:flex;flex-direction:column;gap:2px}
+  .diagrow .mv button{border:1px solid var(--rule);background:#fff;border-radius:4px;width:22px;height:16px;cursor:pointer;font-size:9px;line-height:1;color:var(--ink-soft);padding:0}
+  .diagrow .mv button:hover{border-color:var(--ink);color:var(--ink)} .diagrow .mv button:disabled{opacity:.3;cursor:default}
+  .pes-sub{margin:-3px 0 9px 2px;padding:8px 10px;background:#fff;border:1px solid var(--rule);border-top:none;border-radius:0 0 7px 7px;font-size:11.5px;line-height:1.6}
+  .pes-sub .prow{display:flex;gap:6px;align-items:baseline;margin:2px 0}
+  .pes-sub .tag{flex:none;font-weight:700;font-family:"Yu Mincho",serif;min-width:16px;text-align:center;border-radius:4px;padding:0 4px}
+  .pes-sub .tag.e{color:#fff;background:var(--pes-e)} .pes-sub .tag.s{color:#fff;background:var(--pes-s)}
+  .pes-sub .items{color:var(--ink);flex:1}
+  .pes-sub .miss{color:var(--accent);font-size:11px}
+  .pes-sub .ok{color:var(--data);font-size:11px}
+  .pes-sub .unset{color:#8a7f6a}
+
+  .question{margin-top:16px;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px;box-shadow:var(--shadow);}
+  .question .q{font-family:"Yu Mincho",serif;font-size:14px;line-height:1.6;margin-bottom:10px}
+  .question textarea{font-size:12.5px;min-height:70px}
+
+  .toolbar{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:5;flex-wrap:wrap;justify-content:flex-end}
+  .toolbar button{border:1px solid var(--rule);background:#ffffffdd;backdrop-filter:blur(4px);border-radius:6px;padding:6px 11px;font-size:12px;cursor:pointer;font-weight:600;color:var(--ink-soft);}
+  .toolbar button:hover{color:var(--ink);border-color:var(--ink)}
+  .toolbar button.print{border-color:var(--ink);color:var(--ink)}
+  .legend{position:absolute;bottom:12px;left:12px;z-index:5;background:#ffffffdd;backdrop-filter:blur(4px);border:1px solid var(--rule);border-radius:8px;padding:9px 12px;font-size:11.5px;display:flex;gap:14px;flex-wrap:wrap;max-width:calc(100% - 24px)}
+  .legend span{display:flex;align-items:center;gap:5px;color:var(--ink-soft)}
+  .legend .sw{width:12px;height:12px;border-radius:3px;flex:none}
+  .legend .sw.diag{border:3px double var(--diag);background:var(--diag-bg);border-radius:2px;width:14px;height:14px}
+  .empty-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.8;pointer-events:none;}
+  .empty-hint .big{font-family:"Yu Mincho",serif;font-size:17px;color:var(--ink);display:block;margin-bottom:6px}
+  /* フェーズガイド */
+  #phaseGuide{position:absolute;top:12px;left:12px;z-index:5;max-width:min(440px,60%);
+    background:#ffffffee;backdrop-filter:blur(4px);border:1px solid var(--rule);border-left:4px solid var(--ink);
+    border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink);box-shadow:var(--shadow)}
+  #phaseGuide b{font-family:"Yu Mincho",serif;letter-spacing:.02em}
+  #phaseGuide .step{font-size:10px;letter-spacing:.12em;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:2px}
+
+  /* 右クリックメニュー */
+  .ctxmenu{position:fixed;z-index:60;background:#fff;border:1px solid var(--rule);border-radius:8px;box-shadow:var(--shadow);padding:4px;min-width:158px;display:none;font-size:13px}
+  .ctxmenu button{display:block;width:100%;text-align:left;border:none;background:none;padding:8px 12px;border-radius:6px;cursor:pointer;color:var(--ink);font:inherit}
+  .ctxmenu button:hover{background:var(--rule-soft)}
+  .ctxmenu button.del{color:var(--accent)}
+  .ctxmenu .sep{height:1px;background:var(--rule-soft);margin:4px 2px}
+
+  ::-webkit-scrollbar{width:9px} ::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
+
+  /* 作法トースト（結線ブロック時の通知） */
+  #toastWrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;
+    display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:none;width:min(560px,92vw)}
+  .toast{pointer-events:auto;background:#fff;border:1px solid var(--rule);border-left:5px solid var(--accent);
+    border-radius:10px;box-shadow:0 6px 28px rgba(35,32,27,.18);padding:14px 16px 14px 15px;
+    display:flex;gap:12px;align-items:flex-start;opacity:0;transform:translateY(12px);transition:.25s ease}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .toast .ico{flex:none;width:26px;height:26px;border-radius:50%;background:#f6e6e4;color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;margin-top:1px}
+  .toast .body{flex:1;font-size:12.8px;line-height:1.65;color:var(--ink)}
+  .toast .body b{color:var(--accent);font-family:"Yu Mincho",serif;letter-spacing:.02em}
+  .toast .body .lead{display:block;margin-bottom:3px}
+  .toast .x{flex:none;border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
+  .toast .x:hover{color:var(--ink)}
+
+  /* 未接続リストの教育的ヒント */
+  .unlinked li{padding:6px 0;border-top:1px dashed #e3c4c0}
+  .unlinked li:first-child{border-top:none}
+  .unlinked li .nm{font-weight:700;color:#6e241f}
+  .unlinked li .tip{display:block;margin-top:2px;color:#8a3b33;font-size:11.5px;line-height:1.55}
+  .unlinked li::before{content:none}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>関連図ワークベンチ</h1>
+    <div class="sub">情報を置き、つながりを判断し、全体像から看護課題を導く</div>
+  </div>
+  <div class="phase">
+    <span class="on" id="ph-input">① 情報入力</span>
+    <span id="ph-link">② つながりの吟味</span>
+    <span id="ph-reflect">③ 課題の導出</span>
+  </div>
+</header>
+
+<main>
+  <section class="panel left">
+    <div class="eyebrow">情報を置く</div>
+    <div class="seg" id="typeSeg">
+      <button data-t="patient"><span class="dot"></span>患者情報</button>
+      <button data-t="speech" class="on"><span class="dot"></span>発話・主観</button>
+      <button data-t="data"><span class="dot"></span>客観データ</button>
+      <button data-t="diagnosis"><span class="dot"></span>看護診断</button>
+    </div>
+
+    <div id="singleInput">
+      <textarea id="nodeText" rows="2" placeholder="例:「夜になると不安で眠れない」"></textarea>
+    </div>
+    <div id="patientInput" style="display:none">
+      <input type="text" id="pName" placeholder="氏名（例: 山田 太郎）">
+      <input type="text" id="pAge" placeholder="年齢（例: 72）">
+      <input type="text" id="pDisease" placeholder="病名（例: 2型糖尿病）">
+    </div>
+
+    <button class="addbtn" id="addNode">＋ 図に置く</button>
+    <div class="hint" id="typeHint">患者が語ったことば。主観情報として、そのまま記録します。</div>
+
+    <div class="divider"></div>
+
+    <div class="line-note">
+      <div class="row">
+        <svg width="34" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#5a5449" stroke-width="2"/><polygon points="26,1 34,5 26,9" fill="#5a5449"/></svg>
+        <span><b>実線</b>：すでに起きている（実在）</span>
+      </div>
+      <div class="row">
+        <svg width="34" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#5a5449" stroke-width="2" stroke-dasharray="4 3"/><polygon points="26,1 34,5 26,9" fill="#5a5449"/></svg>
+        <span><b>点線</b>：可能性（まだ起きていない）</span>
+      </div>
+      <div style="margin-top:5px;color:var(--ink-soft)">ノードを2つ続けてタップ＝線を引く。線をタップ＝実線⇄点線。<b>右クリック</b>＝削除・切替メニュー。</div>
+    </div>
+  </section>
+
+  <section class="panel stage" style="padding:0">
+    <div class="toolbar">
+      <button id="fitBtn">全体表示</button>
+      <button id="relayoutBtn">再配置</button>
+      <button id="clearBtn">クリア</button>
+      <button id="printBtn" class="print">🖶 印刷 / PDF</button>
+    </div>
+    <div id="cy"></div>
+    <div id="phaseGuide"></div>
+    <div class="empty-hint" id="emptyHint">
+      <span class="big">まだ何も置かれていません</span>
+      左のパネルから、患者情報・発話・客観データ・看護診断を置いてみましょう。
+    </div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--patient)"></span>患者情報</span>
+      <span><span class="sw" style="background:var(--speech)"></span>発話・主観</span>
+      <span><span class="sw" style="background:var(--data)"></span>客観データ</span>
+      <span><span class="sw diag"></span>看護診断（二重枠）</span>
+      <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>E 原因・関連因子</span>
+      <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span>S 症状・徴候</span>
+    </div>
+  </section>
+
+  <section class="panel right">
+    <div class="eyebrow">全体像の点検</div>
+    <div class="stat"><span>置いた情報</span><span class="n" id="cNodes">0</span></div>
+    <div class="stat"><span>つながり（実線／点線）</span><span class="n" id="cEdges">0</span></div>
+    <div class="stat"><span>未接続の情報</span><span class="n warn" id="cUnlinked">0</span></div>
+
+    <div class="unlinked" id="unlinkedBox" style="display:none">
+      <b>⚠ どこにもつながっていない情報</b>
+      拾ったが全体像に位置づけられていません。本当に無関係か、見落としか、確かめましょう。
+      <ul id="unlinkedList"></ul>
+    </div>
+
+    <div class="divider"></div>
+    <div class="eyebrow">看護診断の優先順位</div>
+    <div id="diagArea">
+      <div class="hint">看護診断を置くと、ここで優先順位（＃1・＃2…）を並べ替えられます。順位は図のノードにも反映されます。</div>
+    </div>
+
+    <div class="question">
+      <div class="q">この構造から、いま優先すべき看護課題は何ですか？</div>
+      <textarea id="taskAnswer" placeholder="図全体を見渡して、根拠とともに記述してください…"></textarea>
+    </div>
+  </section>
+</main>
+
+<div class="ctxmenu" id="ctxMenu"></div>
+<div id="toastWrap"></div>
+
+<script>
+/* ============================================================
+   関連図ワークベンチ v3
+   追加: 矢印の右クリック削除・始点分散配置・患者情報型(氏名/年齢/病名)
+   ============================================================ */
+
+const TYPE_META = {
+  patient:   {border:'#3d4a70', bgvar:'--patient-bg', hint:'この関連図の主体。氏名・年齢・病名を枠として記録します。'},
+  speech:    {border:'#2f6f9f', bgvar:'--speech-bg',  hint:'患者が語ったことば。主観情報として、そのまま記録します。'},
+  data:      {border:'#3f8a5c', bgvar:'--data-bg',    hint:'検査値・バイタル・観察事実など。測定・観察された客観情報です。'},
+  diagnosis: {border:'#3a362f', bgvar:'--diag-bg',    hint:'全体像から導いた結論。二重枠で表示され、複数あるときは優先順位（＃）をつけられます。'}
+};
+const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+let currentType='speech', nodeSeq=0, diagnosisOrder=[];
+const interactionLog=[];
+function log(a,p){ interactionLog.push({t:Date.now(),action:a,...p}); }
+
+/* ---- Cytoscape ---- */
+const cy = cytoscape({
+  container:document.getElementById('cy'), minZoom:.35,maxZoom:2.5,
+  style:[
+    { selector:'node', style:{
+        'label':'data(label)','width':'label','height':'label','padding':'12px',
+        'shape':'round-rectangle','background-color':'data(bg)','border-width':2,'border-color':'data(border)',
+        'font-size':'13px','font-family':'Hiragino Kaku Gothic ProN, sans-serif','color':'#23201b',
+        'text-wrap':'wrap','text-max-width':'170px','text-valign':'center','text-halign':'center'}},
+    { selector:'node[ntype="patient"]', style:{
+        'text-justification':'left','padding':'14px','font-size':'12.5px','text-max-width':'190px'}},
+    { selector:'node[ntype="diagnosis"]', style:{'border-style':'double','border-width':5,'padding':'15px','font-weight':'bold'}},
+    { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
+    { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
+    { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
+    /* 直交ルーティング・ラベルなし。始点はJSで分散。 */
+    { selector:'edge', style:{
+        'width':2,'line-color':'#5a5449','target-arrow-color':'#5a5449','target-arrow-shape':'triangle','arrow-scale':1.1,
+        'curve-style':'taxi','taxi-turn':'40%','taxi-turn-min-distance':'8px',
+        'source-endpoint':'outside-to-node','target-endpoint':'outside-to-node'}},
+    /* 看護診断(P)へ入る矢印だけラベル+色分け。E=原因・関連因子 / S=症状・根拠データ */
+    { selector:'edge[pes]', style:{
+        'label':'data(pesLabel)','font-size':'10px','font-weight':'bold',
+        'font-family':'Hiragino Kaku Gothic ProN, sans-serif',
+        'text-background-color':'#f7f5ef','text-background-opacity':1,'text-background-padding':'2px',
+        'text-rotation':'autorotate'}},
+    { selector:'edge[pes="E"]', style:{'line-color':'#c15a2e','target-arrow-color':'#c15a2e','color':'#c15a2e','width':2.5}},
+    { selector:'edge[pes="S"]', style:{'line-color':'#2e8b8b','target-arrow-color':'#2e8b8b','color':'#2e8b8b','width':2.5}},
+    { selector:'edge.potential', style:{'line-style':'dashed'}},
+    { selector:'edge:selected', style:{'line-color':'#23201b','target-arrow-color':'#23201b','width':3}}
+  ],
+  layout:{name:'preset'}
+});
+
+/* ============================================================
+   始点分散: 同じノードから出る複数の線を、縁に沿って散らし、
+   進行方向の側から出す（どこから出た線か分かるように）
+   ============================================================ */
+function spreadEndpoints(){
+  cy.nodes().forEach(src=>{
+    const outs=src.outgoers('edge');
+    const k=outs.length; if(!k) return;
+    outs.forEach((e,i)=>{
+      const t=e.target();
+      const dx=t.position('x')-src.position('x');
+      const dy=t.position('y')-src.position('y');
+      const spread = k>1 ? ((i/(k-1))-0.5)*64 : 0;   // -32%..32%
+      let ex,ey,dir;
+      if(Math.abs(dx)>=Math.abs(dy)){          // 左右の辺から出す
+        ex = dx>=0?50:-50; ey=spread; dir = dx>=0?'rightward':'leftward';
+      }else{                                    // 上下の辺から出す
+        ey = dy>=0?50:-50; ex=spread; dir = dy>=0?'downward':'upward';
+      }
+      e.style('source-endpoint',`${ex}% ${ey}%`);
+      e.style('taxi-direction',dir);
+    });
+  });
+}
+let seRAF=false;
+function scheduleSpread(){ if(seRAF)return; seRAF=true; requestAnimationFrame(()=>{seRAF=false;spreadEndpoints();}); }
+cy.on('position','node',scheduleSpread);
+cy.on('layoutstop',spreadEndpoints);
+
+/* ---- 結線 / 切替 ---- */
+let linkSource=null;
+cy.on('tap','node',evt=>{
+  const n=evt.target;
+  if(linkSource&&linkSource.id()!==n.id()){ addEdge(linkSource.id(),n.id(),{potential:false}); linkSource.unselect(); linkSource=null; }
+  else if(linkSource&&linkSource.id()===n.id()){ linkSource=null; }
+  else linkSource=n;
+});
+cy.on('tap','edge',evt=>{ const e=evt.target; e.toggleClass('potential'); e.data('actual',!e.hasClass('potential')); log('toggle_edge',{id:e.id()}); });
+cy.on('tap',evt=>{ if(evt.target===cy){ linkSource=null; hideCtx(); } });
+
+/* ============================================================
+   右クリック（cxttap）メニュー: 矢印の削除・切替、ノード削除
+   ============================================================ */
+const ctx=document.getElementById('ctxMenu');
+document.getElementById('cy').addEventListener('contextmenu',e=>e.preventDefault());
+function hideCtx(){ ctx.style.display='none'; ctx.innerHTML=''; }
+function openCtx(x,y){ ctx.style.display='block';
+  const w=ctx.offsetWidth,h=ctx.offsetHeight;
+  ctx.style.left=Math.min(x,innerWidth-w-6)+'px';
+  ctx.style.top=Math.min(y,innerHeight-h-6)+'px'; }
+function mkbtn(label,fn,danger){ const b=document.createElement('button'); b.textContent=label; if(danger)b.className='del'; b.onclick=fn; return b; }
+function sep(){ const s=document.createElement('div'); s.className='sep'; return s; }
+document.addEventListener('click',e=>{ if(!ctx.contains(e.target)) hideCtx(); });
+window.addEventListener('scroll',hideCtx,true);
+
+cy.on('cxttap','edge',evt=>{
+  const e=evt.target, oe=evt.originalEvent; evt.preventDefault&&evt.preventDefault();
+  ctx.innerHTML='';
+  const role=e.data('pes');
+  if(role){   // 看護診断連鎖上の矢印: 現在の役割を表示（自動判定）
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;padding:6px 12px 4px;line-height:1.5;color:'+(role==='E'?'#c15a2e':'#2e8b8b');
+    info.innerHTML=(role==='E'?'この矢印は <b>E（原因・関連因子）</b>':'この矢印は <b>S（症状・徴候）</b>')+'<br><span style="color:var(--ink-soft)">※つなぐ位置から自動判定</span>';
+    ctx.appendChild(info); ctx.appendChild(sep());
+  }
+  ctx.appendChild(mkbtn(e.hasClass('potential')?'実線にする（実在）':'点線にする（可能性）',
+    ()=>{ e.toggleClass('potential'); e.data('actual',!e.hasClass('potential')); log('toggle_edge',{id:e.id()}); hideCtx(); }));
+  ctx.appendChild(sep());
+  ctx.appendChild(mkbtn('矢印を削除',()=>{ log('delete_edge',{id:e.id()}); e.remove(); refresh(); scheduleSpread(); hideCtx(); },true));
+  openCtx(oe.clientX,oe.clientY);
+});
+cy.on('cxttap','node',evt=>{
+  const n=evt.target, oe=evt.originalEvent;
+  ctx.innerHTML='';
+  const label = n.data('ntype')==='patient' ? '患者情報を削除'
+              : n.data('ntype')==='diagnosis' ? '看護診断を削除' : 'ノードを削除';
+  ctx.appendChild(mkbtn(label,()=>{
+    const wasDiag=n.data('ntype')==='diagnosis';
+    log('delete_node',{id:n.id(),ntype:n.data('ntype')});
+    n.remove();
+    if(wasDiag){ diagnosisOrder=diagnosisOrder.filter(id=>!cy.getElementById(id).empty()); relabelDiagnoses(); }
+    refresh(); scheduleSpread(); hideCtx();
+  },true));
+  openCtx(oe.clientX,oe.clientY);
+});
+cy.on('cxttap',evt=>{ if(evt.target===cy) hideCtx(); });
+
+/* ---- 型セグメント（患者情報は専用フォームに切替）---- */
+document.getElementById('typeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); currentType=b.dataset.t;
+  document.getElementById('typeHint').textContent=TYPE_META[currentType].hint;
+  const pt=currentType==='patient';
+  document.getElementById('patientInput').style.display=pt?'block':'none';
+  document.getElementById('singleInput').style.display=pt?'none':'block';
+  (pt?document.getElementById('pName'):document.getElementById('nodeText')).focus();
+});
+
+/* ---- ノード追加 ---- */
+function patientLabel(name,age,disease){
+  const a = age ? (/^\d+$/.test(age)?age+'歳':age) : '';
+  const L=['【患者情報】'];
+  L.push('氏名: '+(name||'―'));
+  L.push('年齢: '+(a||'―'));
+  L.push('病名: '+(disease||'―'));
+  return L.join('\n');
+}
+function addNode(type,payload){
+  const id='n'+(++nodeSeq), m=TYPE_META[type];
+  let base,label,extra={};
+  if(type==='patient'){
+    base='患者情報'+(payload.name?`（${payload.name}）`:'');
+    label=patientLabel(payload.name,payload.age,payload.disease);
+    extra={pname:payload.name,page:payload.age,pdisease:payload.disease};
+  }else{ base=payload.text; label=payload.text; }
+  cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},
+    position:{x:120+Math.random()*260,y:90+Math.random()*240}});
+  if(type==='diagnosis'){ diagnosisOrder.push(id); relabelDiagnoses(); renderDiagnoses(); }
+  log('add_node',{id,type}); refresh(); return id;
+}
+document.getElementById('addNode').addEventListener('click',()=>{
+  if(currentType==='patient'){
+    const name=pName.value.trim(),age=pAge.value.trim(),disease=pDisease.value.trim();
+    if(!name&&!age&&!disease) return;
+    addNode('patient',{name,age,disease}); pName.value=pAge.value=pDisease.value=''; pName.focus();
+  }else{
+    const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
+    addNode(currentType,{text:v}); ta.value=''; ta.focus();
+  }
+});
+document.getElementById('nodeText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) document.getElementById('addNode').click(); });
+document.getElementById('pDisease').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addNode').click(); });
+
+/* ---- 作法トースト ---- */
+function showToast(html, ms=7000){
+  const wrap=document.getElementById('toastWrap');
+  const el=document.createElement('div'); el.className='toast';
+  el.innerHTML=`<div class="ico">!</div><div class="body">${html}</div><button class="x" aria-label="閉じる">×</button>`;
+  const close=()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),250); };
+  el.querySelector('.x').onclick=close;
+  wrap.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('show'));
+  if(ms) setTimeout(close, ms);
+}
+
+/* ---- エッジ（PESの作法バリデーション付き）---- */
+function addEdge(s,t,{potential=false}={}){
+  const sn=cy.getElementById(s), tn=cy.getElementById(t);
+  if(sn.empty()||tn.empty()) return false;
+
+  // 作法①: 看護診断(P)から矢印を出させない（主客逆転の防止）
+  if(sn.data('ntype')==='diagnosis'){
+    log('blocked_edge',{reason:'source_is_diagnosis',source:s,target:t});
+    showToast(`<span class="lead"><b>【関連図の作法】</b></span>看護診断は、集まった情報（EやS）から導き出した「結論」です。診断名から他の情報へ矢印を伸ばすことはありません。矢印の向きを逆に（<b>情報 ➔ 看護診断</b>）してみましょう。`);
+    return false;
+  }
+  // 作法②: 患者情報へ矢印を入れさせない（前提・起点だから）
+  if(tn.data('ntype')==='patient'){
+    log('blocked_edge',{reason:'target_is_patient',source:s,target:t});
+    showToast(`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`);
+    return false;
+  }
+
+  if(cy.edges(`[source="${s}"][target="${t}"]`).length) return false;
+  cy.add({group:'edges',data:{id:'e_'+s+'_'+t,source:s,target:t,actual:!potential},classes:potential?'potential':''});
+  log('add_edge',{source:s,target:t,potential});
+  if(cy.edges().length && document.getElementById('ph-input').classList.contains('on')) setPhase('link');
+  refresh(); scheduleSpread();
+  return true;
+}
+
+/* ============================================================
+   PES自動判定（結線の位置から役割を決める）
+   E（原因・関連因子）→ S（症状・徴候）→ P（看護診断）
+   ・P（診断）へ入る矢印        → その矢印は S
+   ・S（＝Pへ向かう矢印を持つノード）へ入る矢印 → その矢印は E
+   ============================================================ */
+const PES_TEXT={ E:'（E：原因・関連因子）', S:'（S：症状・徴候）' };
+function pesRole(edge){
+  const tgt=edge.target();
+  if(tgt.data('ntype')==='diagnosis') return 'S';              // 症状 → 診断
+  const tgtIsSymptom = tgt.outgoers('edge').some(e=>e.target().data('ntype')==='diagnosis');
+  if(tgtIsSymptom) return 'E';                                 // 原因 → 症状
+  return null;
+}
+function updatePES(){
+  cy.edges().forEach(e=>{
+    const r=pesRole(e);
+    if(r){ if(e.data('pes')!==r){ e.data('pes',r); log('pes_role',{id:e.id(),pes:r}); } e.data('pesLabel',PES_TEXT[r]); }
+    else if(e.data('pes')!==undefined){ e.removeData('pes'); e.removeData('pesLabel'); }
+  });
+}
+
+/* ---- 看護診断の優先順位 ---- */
+function relabelDiagnoses(){
+  diagnosisOrder.forEach((id,i)=>{ const n=cy.getElementById(id); if(n.empty())return;
+    n.data('label', diagnosisOrder.length>1?`#${i+1}  ${n.data('base')}`:n.data('base')); });
+}
+function renderDiagnoses(){
+  diagnosisOrder=diagnosisOrder.filter(id=>!cy.getElementById(id).empty());
+  const area=document.getElementById('diagArea');
+  if(!diagnosisOrder.length){ area.innerHTML='<div class="hint">看護診断を置くと、ここで優先順位（＃1・＃2…）を並べ替えられます。順位は図のノードにも反映されます。</div>'; return; }
+  area.innerHTML='<div class="diaglist"></div>'; const list=area.querySelector('.diaglist');
+  diagnosisOrder.forEach((id,i)=>{
+    const n=cy.getElementById(id);
+    const item=document.createElement('div');   // 行 + PES集計 をまとめる
+    const row=document.createElement('div'); row.className='diagrow';
+    row.innerHTML=`<span class="pri">#${i+1}</span><span class="txt">${esc(n.data('base'))}</span>
+      <span class="mv"><button class="up" ${i===0?'disabled':''}>▲</button><button class="down" ${i===diagnosisOrder.length-1?'disabled':''}>▼</button></span>`;
+    row.querySelector('.up').onclick=()=>moveDiag(i,-1); row.querySelector('.down').onclick=()=>moveDiag(i,1);
+    item.appendChild(row);
+
+    // E→S→P の連鎖で仕分け：Pへ入る=S、そのSノードへ入る=E
+    const Sedges=n.incomers('edge');
+    const Snodes=Sedges.map(e=>e.source());
+    const S=[...new Set(Snodes.map(sn=>sn.data('base')))];
+    const Eset=new Set();
+    Snodes.forEach(sn=> sn.incomers('edge').forEach(e=> Eset.add(e.source().data('base'))) );
+    const E=[...Eset];
+    const sub=document.createElement('div'); sub.className='pes-sub';
+    sub.innerHTML=`
+      <div class="prow"><span class="tag s">S</span><span class="items">${S.length?S.map(esc).join('、'):'<span class="miss">症状・徴候（S）が未接続 → S ➔ P を繋ぎましょう</span>'}</span></div>
+      <div class="prow"><span class="tag e">E</span><span class="items">${E.length?E.map(esc).join('、'):(S.length?'<span class="miss">症状の原因（E）が未接続 → E ➔ S を繋ぎましょう</span>':'<span class="unset">— まず S を繋いでから</span>')}</span></div>
+      <div style="margin-top:3px">${(E.length&&S.length)?'<span class="ok">✓ E → S → P の連鎖ができています</span>':'<span class="miss">※ 診断（P）は 症状（S）に、症状は 原因（E）に支えられます</span>'}</div>`;
+    item.appendChild(sub);
+    list.appendChild(item);
+  });
+}
+function moveDiag(i,d){ const j=i+d; if(j<0||j>=diagnosisOrder.length)return;
+  [diagnosisOrder[i],diagnosisOrder[j]]=[diagnosisOrder[j],diagnosisOrder[i]];
+  relabelDiagnoses(); renderDiagnoses(); log('reorder_diagnosis',{order:[...diagnosisOrder]}); }
+
+/* ---- （提案機能は無効化。手動で結線）---- */
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---- 状態更新 ---- */
+/* ---- 未接続ノードの型別ヒント（PES構造への気づきを促す）---- */
+function unlinkedTip(ntype){
+  switch(ntype){
+    case 'speech':
+    case 'data':
+      return '➔ これは何の「症状（S）」または「原因（E）」になり得ますか？ 関連する項目や看護診断へ繋いでみましょう。';
+    case 'diagnosis':
+      return '➔ この診断を下した根拠となる「データ（S）」や「原因（E）」がまだ結びついていません。';
+    case 'patient':
+      return '➔ 図の主体（前提）です。関連する現象やデータへ繋いで、全体像の起点にしましょう。';
+    default:
+      return '➔ 全体像のどこに位置づくか、つながりを考えてみましょう。';
+  }
+}
+
+function refresh(){
+  document.getElementById('cNodes').textContent=cy.nodes().length;
+  document.getElementById('cEdges').textContent=cy.edges().length;
+  document.getElementById('emptyHint').style.display=cy.nodes().length?'none':'block';
+  const unlinked=cy.nodes().filter(n=>n.degree()===0);
+  cy.nodes().removeClass('unlinked'); unlinked.addClass('unlinked');
+  document.getElementById('cUnlinked').textContent=unlinked.length;
+  const box=document.getElementById('unlinkedBox');
+  if(unlinked.length){ box.style.display='block';
+    document.getElementById('unlinkedList').innerHTML=unlinked.map(n=>{
+      const nm=esc(n.data('base'));
+      return `<li><span class="nm">${nm}</span><span class="tip">${unlinkedTip(n.data('ntype'))}</span></li>`;
+    }).join(''); }
+  else box.style.display='none';
+  updatePES();          // 結線位置からE/Sを自動判定
+  renderDiagnoses();
+}
+const PHASE_GUIDE={
+  input:{step:'STEP 1 ／ アセスメント', html:'左のパネルから <b>患者情報・発話（S）・客観データ（S）・看護診断（P）</b> を置きましょう。まずは情報を集めて並べる段階です。'},
+  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてタップ＝線を引く。<b>E（原因）→ S（症状）→ P（診断）</b> の向きで繋ぐと、矢印にE/Sが自動表示されます。線をタップ＝実線⇄点線。'},
+  reflect:{step:'STEP 3 ／ 看護診断・課題', html:'右で <b>各Pが S（症状）に、SがE（原因）に支えられているか</b> と未接続を点検し、優先順位（＃）を決めて、右下に<b>優先すべき看護課題</b>を記述します。'}
+};
+function setPhase(p){
+  ['input','link','reflect'].forEach(x=>document.getElementById('ph-'+x).classList.toggle('on',x===p));
+  const g=PHASE_GUIDE[p]; const el=document.getElementById('phaseGuide');
+  if(g){ el.innerHTML=`<span class="step">${g.step}</span>${g.html}`; el.style.display='block'; }
+}
+/* フェーズタブを能動的に切替可能に */
+[['ph-input','input'],['ph-link','link'],['ph-reflect','reflect']].forEach(([id,p])=>{
+  document.getElementById(id).addEventListener('click',()=>{ setPhase(p); log('phase_click',{phase:p}); });
+});
+document.getElementById('taskAnswer').addEventListener('focus',()=>setPhase('reflect'));
+
+/* ---- ツールバー ---- */
+document.getElementById('fitBtn').onclick=()=>cy.fit(null,50);
+document.getElementById('relayoutBtn').onclick=()=>{ const l=cy.layout({name:'cose',animate:true,padding:40,nodeRepulsion:9000,idealEdgeLength:100}); l.one('layoutstop',spreadEndpoints); l.run(); };
+document.getElementById('clearBtn').onclick=()=>{ if(confirm('図をすべて消去します。よろしいですか？')){ cy.elements().remove(); nodeSeq=0; diagnosisOrder=[]; refresh(); log('clear_all',{}); } };
+
+/* ---- 印刷 / PDF ---- */
+document.getElementById('printBtn').onclick=()=>{
+  if(cy.nodes().length===0){ alert('印刷する図がありません。'); return; }
+  const png=cy.png({full:true,scale:2,bg:'#ffffff',maxWidth:1600});
+  const diags=diagnosisOrder.map((id,i)=>`<li><b>#${i+1}</b>　${esc(cy.getElementById(id).data('base'))}</li>`).join('');
+  const task=esc(document.getElementById('taskAnswer').value||'（未記入）');
+  const now=new Date().toLocaleString('ja-JP');
+  const w=window.open('','_blank'); if(!w){ alert('ポップアップがブロックされました。印刷を許可してください。'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>関連図</title><style>
+    @page{size:A4 landscape;margin:12mm}
+    body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#23201b;margin:0;padding:8px}
+    h1{font-family:"Yu Mincho",serif;font-size:18px;margin:0 0 2px}.meta{font-size:11px;color:#6b6459;margin-bottom:10px}
+    .fig{width:100%;border:1px solid #d8d2c4;border-radius:6px}.fig img{width:100%;display:block}
+    .lg{font-size:11px;color:#6b6459;margin:6px 0 14px;display:flex;gap:16px;flex-wrap:wrap}
+    h2{font-size:13px;letter-spacing:.08em;border-bottom:1px solid #d8d2c4;padding-bottom:3px;margin:14px 0 6px}
+    ol.d{list-style:none;padding:0;font-size:13px}ol.d li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}
+    .task{font-size:13px;line-height:1.7;white-space:pre-wrap;background:#faf9f5;border:1px solid #d8d2c4;border-radius:6px;padding:10px}</style></head><body>
+    <h1>関連図</h1><div class="meta">作成日時: ${now}</div>
+    <div class="fig"><img src="${png}"></div>
+    <div class="lg"><span>■患者情報　■発話・主観　■客観データ　■看護診断（二重枠）</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━E（原因・関連因子）</span><span style="color:#2e8b8b">━S（症状・徴候）</span></div>
+    ${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}
+    <h2>この構造から導いた看護課題</h2><div class="task">${task}</div></body></html>`);
+  w.document.close(); w.onload=()=>{ w.focus(); w.print(); }; log('export_print',{nodes:cy.nodes().length,edges:cy.edges().length});
+};
+
+window.addEventListener('load',()=>{ document.getElementById('nodeText').focus(); setPhase('input'); });
+
+/* ============================================================
+   ・PESは結線の位置から自動判定：P へ入る矢印=S（症状→診断）、
+     S ノードへ入る矢印=E（原因→症状）。E→S→P の連鎖を可視化。
+   ・矢印の右クリック削除・実線点線切替・始点分散・PES判定はすべて interactionLog に記録
+   ============================================================ */
+</script>
+</body>
+</html>
