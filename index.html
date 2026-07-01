@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -14,6 +13,7 @@
     --speech:#2f6f9f;  --speech-bg:#e3eef6;
     --data:#3f8a5c;    --data-bg:#e2efe7;
     --diag:#3a362f;    --diag-bg:#efece3;       /* 看護診断: 結論 */
+    --care:#7b5aa6;    --care-bg:#efe9f7;       /* 看護ケア: OP/TP/EP */
     --accent:#9a3b34;  --proposed:#9b8cc4; --edge:#5a5449;
     --pes-e:#c15a2e;   --pes-s:#2e8b8b;   /* E=原因・関連因子 / S=症状・根拠データ */
     --shadow:0 1px 2px rgba(35,32,27,.08),0 8px 24px rgba(35,32,27,.06);
@@ -51,7 +51,14 @@
   .seg button[data-t="speech"] .dot{background:var(--speech)}
   .seg button[data-t="data"] .dot{background:var(--data)}
   .seg button[data-t="diagnosis"] .dot{background:var(--diag-bg);border:3px double var(--diag);border-radius:2px}
+  .seg button[data-t="care"] .dot{background:var(--care);border-radius:2px}
   .seg button.on{border-color:var(--ink);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
+  /* OP/TP/EP 選択 */
+  .careseg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+  .careseg button{border:1px solid var(--rule);background:#fff;border-radius:7px;padding:7px 2px;font-size:11px;
+    cursor:pointer;color:var(--ink-soft);line-height:1.35;text-align:center}
+  .careseg button b{display:block;font-size:12.5px;color:var(--care)}
+  .careseg button.on{border-color:var(--care);color:var(--ink);box-shadow:var(--shadow);font-weight:700}
   textarea,input[type=text]{width:100%;border:1px solid var(--rule);border-radius:7px;padding:9px 10px;
     font:inherit;font-size:13px;background:#fff;resize:vertical;color:var(--ink);}
   textarea:focus,input:focus{outline:2px solid var(--speech);outline-offset:-1px}
@@ -105,6 +112,18 @@
   .pes-sub .miss{color:var(--accent);font-size:11px}
   .pes-sub .ok{color:var(--data);font-size:11px}
   .pes-sub .unset{color:#8a7f6a}
+  /* 看護ケアの点検 */
+  .care-item{background:#fff;border:1px solid var(--rule);border-left:4px solid var(--care);border-radius:7px;
+    padding:8px 10px;margin-bottom:7px;font-size:12px;line-height:1.5}
+  .care-item .en{font-weight:700;color:#6e241f}
+  .care-item .en .etag{background:var(--pes-e);color:#fff;border-radius:4px;padding:0 5px;font-size:10px;margin-right:5px;font-family:"Yu Mincho",serif}
+  .care-item .kinds{margin-top:4px;display:flex;gap:5px;flex-wrap:wrap}
+  .care-item .k{font-size:10.5px;font-weight:700;border-radius:4px;padding:1px 7px;border:1px solid var(--care);color:var(--care)}
+  .care-item .k.on{background:var(--care);color:#fff}
+  .care-item .miss{color:var(--accent);font-size:11px;margin-top:3px}
+  .care-item .okmsg{color:var(--data);font-size:11px;margin-top:3px}
+  .care-alert{background:#f6e6e4;border:1px solid #e3c4c0;border-radius:7px;padding:9px 10px;margin-bottom:9px;
+    font-size:12px;color:#7a2e28;line-height:1.5}
 
   .question{margin-top:16px;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px;box-shadow:var(--shadow);}
   .question .q{font-family:"Yu Mincho",serif;font-size:14px;line-height:1.6;margin-bottom:10px}
@@ -163,7 +182,7 @@
 <header>
   <div>
     <h1>関連図</h1>
-  </div>
+   </div>
   <div class="phase">
     <span class="on" id="ph-input">① 情報入力</span>
     <span id="ph-link">② つながりの吟味</span>
@@ -179,8 +198,17 @@
       <button data-t="speech" class="on"><span class="dot"></span>発話・主観</button>
       <button data-t="data"><span class="dot"></span>客観データ</button>
       <button data-t="diagnosis"><span class="dot"></span>看護診断</button>
+      <button data-t="care"><span class="dot"></span>看護ケア</button>
     </div>
 
+    <div id="careInput" style="display:none">
+      <div class="careseg" id="careSeg">
+        <button data-c="OP" class="on"><b>OP</b>観察計画</button>
+        <button data-c="TP"><b>TP</b>ケア計画</button>
+        <button data-c="EP"><b>EP</b>教育計画</button>
+      </div>
+      <textarea id="careText" rows="2" placeholder="例: 食後2時間の血糖値を測定する"></textarea>
+    </div>
     <div id="singleInput">
       <textarea id="nodeText" rows="2" placeholder="例:「夜になると不安で眠れない」"></textarea>
     </div>
@@ -219,13 +247,14 @@
     <div id="phaseGuide"></div>
     <div class="empty-hint" id="emptyHint">
       <span class="big">まだ何も置かれていません</span>
-      左のパネルから、患者情報・発話・客観データ・看護診断を置いてみましょう。
+      左のパネルから、患者情報・発話・客観データ・看護診断・看護ケアを置いてみましょう。
     </div>
     <div class="legend">
       <span><span class="sw" style="background:var(--patient)"></span>患者情報</span>
       <span><span class="sw" style="background:var(--speech)"></span>発話・主観</span>
       <span><span class="sw" style="background:var(--data)"></span>客観データ</span>
       <span><span class="sw diag"></span>看護診断（二重枠）</span>
+      <span><span class="sw" style="background:var(--care)"></span>看護ケア（OP/TP/EP）</span>
       <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>E 原因・関連因子</span>
       <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span>S 症状・徴候</span>
     </div>
@@ -241,6 +270,12 @@
       <b>⚠ どこにもつながっていない情報</b>
       拾ったが全体像に位置づけられていません。本当に無関係か、見落としか、確かめましょう。
       <ul id="unlinkedList"></ul>
+    </div>
+
+    <div class="divider"></div>
+    <div class="eyebrow">看護ケアの点検（E ➔ OP/TP/EP）</div>
+    <div id="careArea">
+      <div class="hint">原因（E）には看護計画（OP/TP/EP）が必要です。E を置いて「看護ケア」ノードへ繋ぐと、ここで過不足を点検できます。</div>
     </div>
 
     <div class="divider"></div>
@@ -269,7 +304,8 @@ const TYPE_META = {
   patient:   {border:'#3d4a70', bgvar:'--patient-bg', hint:'この関連図の主体。氏名・年齢・病名を枠として記録します。'},
   speech:    {border:'#2f6f9f', bgvar:'--speech-bg',  hint:'患者が語ったことば。主観情報として、そのまま記録します。'},
   data:      {border:'#3f8a5c', bgvar:'--data-bg',    hint:'検査値・バイタル・観察事実など。測定・観察された客観情報です。'},
-  diagnosis: {border:'#3a362f', bgvar:'--diag-bg',    hint:'全体像から導いた結論。二重枠で表示され、複数あるときは優先順位（＃）をつけられます。'}
+  diagnosis: {border:'#3a362f', bgvar:'--diag-bg',    hint:'全体像から導いた結論。二重枠で表示され、複数あるときは優先順位（＃）をつけられます。'},
+  care:      {border:'#7b5aa6', bgvar:'--care-bg',    hint:'原因（E）に対する看護計画。OP（観察）/TP（ケア）/EP（教育）を選び、E ➔ 看護ケア で繋ぎます。'}
 };
 const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
@@ -289,6 +325,8 @@ const cy = cytoscape({
     { selector:'node[ntype="patient"]', style:{
         'text-justification':'left','padding':'14px','font-size':'12.5px','text-max-width':'190px'}},
     { selector:'node[ntype="diagnosis"]', style:{'border-style':'double','border-width':5,'padding':'15px','font-weight':'bold'}},
+    { selector:'node[ntype="care"]', style:{'shape':'round-tag','border-width':2,'padding':'11px','font-size':'12px'}},
+    { selector:'node.needcare', style:{'border-color':'#9a3b34','border-width':3}},
     { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
     { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
     { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
@@ -398,16 +436,24 @@ cy.on('cxttap','node',evt=>{
 });
 cy.on('cxttap',evt=>{ if(evt.target===cy) hideCtx(); });
 
-/* ---- 型セグメント（患者情報は専用フォームに切替）---- */
+/* ---- 型セグメント（患者情報・看護ケアは専用フォームに切替）---- */
+let careKind='OP';
 document.getElementById('typeSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); currentType=b.dataset.t;
   document.getElementById('typeHint').textContent=TYPE_META[currentType].hint;
-  const pt=currentType==='patient';
+  const pt=currentType==='patient', ca=currentType==='care';
   document.getElementById('patientInput').style.display=pt?'block':'none';
-  document.getElementById('singleInput').style.display=pt?'none':'block';
-  (pt?document.getElementById('pName'):document.getElementById('nodeText')).focus();
+  document.getElementById('careInput').style.display=ca?'block':'none';
+  document.getElementById('singleInput').style.display=(pt||ca)?'none':'block';
+  (pt?document.getElementById('pName'):ca?document.getElementById('careText'):document.getElementById('nodeText')).focus();
+});
+/* OP/TP/EP の選択 */
+document.getElementById('careSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#careSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); careKind=b.dataset.c; document.getElementById('careText').focus();
 });
 
 /* ---- ノード追加 ---- */
@@ -426,22 +472,29 @@ function addNode(type,payload){
     base='患者情報'+(payload.name?`（${payload.name}）`:'');
     label=patientLabel(payload.name,payload.age,payload.disease);
     extra={pname:payload.name,page:payload.age,pdisease:payload.disease};
+  }else if(type==='care'){
+    base=payload.text; extra={carekind:payload.carekind};
+    label=payload.carekind+': '+payload.text;   // OP:/TP:/EP: を頭に付与
   }else{ base=payload.text; label=payload.text; }
   cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},
     position:{x:120+Math.random()*260,y:90+Math.random()*240}});
   if(type==='diagnosis'){ diagnosisOrder.push(id); relabelDiagnoses(); renderDiagnoses(); }
-  log('add_node',{id,type}); refresh(); return id;
+  log('add_node',{id,type,carekind:extra.carekind}); refresh(); return id;
 }
 document.getElementById('addNode').addEventListener('click',()=>{
   if(currentType==='patient'){
     const name=pName.value.trim(),age=pAge.value.trim(),disease=pDisease.value.trim();
     if(!name&&!age&&!disease) return;
     addNode('patient',{name,age,disease}); pName.value=pAge.value=pDisease.value=''; pName.focus();
+  }else if(currentType==='care'){
+    const ta=document.getElementById('careText'); const v=ta.value.trim(); if(!v) return;
+    addNode('care',{text:v,carekind:careKind}); ta.value=''; ta.focus();
   }else{
     const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
     addNode(currentType,{text:v}); ta.value=''; ta.focus();
   }
 });
+document.getElementById('careText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) document.getElementById('addNode').click(); });
 document.getElementById('nodeText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) document.getElementById('addNode').click(); });
 document.getElementById('pDisease').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addNode').click(); });
 
@@ -497,12 +550,40 @@ function pesRole(edge){
   if(tgtIsSymptom) return 'E';                                 // 原因 → 症状
   return null;
 }
+/* ノードのPES役割: 診断へ矢印を出す=S、S(症状)へ矢印を出す=E */
+function nodeRole(n){
+  if(n.data('ntype')!=='speech' && n.data('ntype')!=='data') return null;
+  const outs=n.outgoers('edge');
+  if(outs.some(e=>e.target().data('ntype')==='diagnosis')) return 'S';
+  if(outs.some(e=> e.target().outgoers('edge').some(e2=>e2.target().data('ntype')==='diagnosis'))) return 'E';
+  return null;
+}
+/* E に看護ケア(OP/TP/EP)が付いているか。付いていなければ needcare */
+function careOf(n){   // n(=E)から出る看護ケアノードの種別配列
+  return n.outgoers('edge').map(e=>e.target()).filter(t=>t.data('ntype')==='care').map(t=>t.data('carekind'));
+}
 function updatePES(){
+  // エッジの E/S ラベル
   cy.edges().forEach(e=>{
     const r=pesRole(e);
     if(r){ if(e.data('pes')!==r){ e.data('pes',r); log('pes_role',{id:e.id(),pes:r}); } e.data('pesLabel',PES_TEXT[r]); }
     else if(e.data('pes')!==undefined){ e.removeData('pes'); e.removeData('pesLabel'); }
   });
+  // ノード頭に E:/S: タグを付与（speech/data のみ）＋ E のケア不足を強調
+  cy.nodes().removeClass('needcare');
+  cy.nodes().forEach(n=>{
+    const nt=n.data('ntype');
+    if(nt==='speech'||nt==='data'){
+      const role=nodeRole(n);
+      const want = role ? role+': '+n.data('base') : n.data('base');
+      if(n.data('label')!==want) n.data('label',want);
+      if(role==='E' && careOf(n).length===0) n.addClass('needcare');   // ケア未設定のE
+    }
+  });
+}
+/* ケア未設定の E ノード一覧 */
+function eNodesMissingCare(){
+  return cy.nodes().filter(n=> (n.data('ntype')==='speech'||n.data('ntype')==='data') && nodeRole(n)==='E' && careOf(n).length===0);
 }
 
 /* ---- 看護診断の優先順位 ---- */
@@ -544,6 +625,31 @@ function moveDiag(i,d){ const j=i+d; if(j<0||j>=diagnosisOrder.length)return;
   [diagnosisOrder[i],diagnosisOrder[j]]=[diagnosisOrder[j],diagnosisOrder[i]];
   relabelDiagnoses(); renderDiagnoses(); log('reorder_diagnosis',{order:[...diagnosisOrder]}); }
 
+/* ---- 看護ケアの点検（E ごとに OP/TP/EP の有無を表示）---- */
+const CARE_KINDS=['OP','TP','EP'];
+function renderCare(){
+  const area=document.getElementById('careArea');
+  const Es=cy.nodes().filter(n=>(n.data('ntype')==='speech'||n.data('ntype')==='data') && nodeRole(n)==='E');
+  if(!Es.length){
+    area.innerHTML='<div class="hint">原因（E）には看護計画（OP/TP/EP）が必要です。E を置いて「看護ケア」ノードへ繋ぐと、ここで過不足を点検できます。</div>';
+    return;
+  }
+  const missing=Es.filter(n=>careOf(n).length===0);
+  let html='';
+  if(missing.length){
+    html+=`<div class="care-alert">⚠ <b>ケア未設定の原因（E）が ${missing.length} 件</b>あります。E には必ず看護計画（OP/TP/EP）を立て、E ➔ 看護ケア で繋いでください。</div>`;
+  }
+  Es.forEach(n=>{
+    const kinds=careOf(n);
+    html+=`<div class="care-item">
+      <div class="en"><span class="etag">E</span>${esc(n.data('base'))}</div>
+      <div class="kinds">${CARE_KINDS.map(k=>`<span class="k ${kinds.includes(k)?'on':''}">${k}</span>`).join('')}</div>
+      ${kinds.length?'<div class="okmsg">✓ 看護計画あり（'+kinds.join('・')+'）</div>':'<div class="miss">看護計画が未設定 → OP/TP/EP を作り、E ➔ 看護ケア で繋ぎましょう</div>'}
+    </div>`;
+  });
+  area.innerHTML=html;
+}
+
 /* ---- （提案機能は無効化。手動で結線）---- */
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
@@ -558,6 +664,8 @@ function unlinkedTip(ntype){
       return '➔ この診断を下した根拠となる「データ（S）」や「原因（E）」がまだ結びついていません。';
     case 'patient':
       return '➔ 図の主体（前提）です。関連する現象やデータへ繋いで、全体像の起点にしましょう。';
+    case 'care':
+      return '➔ 看護計画（OP/TP/EP）です。対応する原因（E）から E ➔ 看護ケア で繋ぎましょう。';
     default:
       return '➔ 全体像のどこに位置づくか、つながりを考えてみましょう。';
   }
@@ -577,13 +685,14 @@ function refresh(){
       return `<li><span class="nm">${nm}</span><span class="tip">${unlinkedTip(n.data('ntype'))}</span></li>`;
     }).join(''); }
   else box.style.display='none';
-  updatePES();          // 結線位置からE/Sを自動判定
+  updatePES();          // 結線位置からE/Sを自動判定＋ケア未設定Eの強調
+  renderCare();         // E ごとの OP/TP/EP 点検
   renderDiagnoses();
 }
 const PHASE_GUIDE={
-  input:{step:'STEP 1 ／ アセスメント', html:'左のパネルから <b>患者情報・発話（S）・客観データ（S）・看護診断（P）</b> を置きましょう。まずは情報を集めて並べる段階です。'},
+  input:{step:'STEP 1 ／ アセスメント', html:'左のパネルから <b>患者情報・発話（S）・客観データ（S）・看護診断（P）・看護ケア（OP/TP/EP）</b> を置きましょう。'},
   link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてタップ＝線を引く。<b>E（原因）→ S（症状）→ P（診断）</b> の向きで繋ぐと、矢印にE/Sが自動表示されます。線をタップ＝実線⇄点線。'},
-  reflect:{step:'STEP 3 ／ 看護診断・課題', html:'右で <b>各Pが S（症状）に、SがE（原因）に支えられているか</b> と未接続を点検し、優先順位（＃）を決めて、右下に<b>優先すべき看護課題</b>を記述します。'}
+  reflect:{step:'STEP 3 ／ 看護診断・看護計画・課題', html:'右で <b>各Pが S（症状）に、SがE（原因）に支えられ、各Eに看護計画（OP/TP/EP）がある</b> かを点検し、優先順位（＃）を決めて、右下に<b>看護課題</b>を記述します。'}
 };
 function setPhase(p){
   ['input','link','reflect'].forEach(x=>document.getElementById('ph-'+x).classList.toggle('on',x===p));
@@ -604,8 +713,19 @@ document.getElementById('clearBtn').onclick=()=>{ if(confirm('図をすべて消
 /* ---- 印刷 / PDF ---- */
 document.getElementById('printBtn').onclick=()=>{
   if(cy.nodes().length===0){ alert('印刷する図がありません。'); return; }
+  const missing=eNodesMissingCare();
+  if(missing.length){
+    const names=missing.map(n=>n.data('base')).join('、');
+    if(!confirm(`看護計画（OP/TP/EP）が未設定の原因（E）があります：\n${names}\n\nEには看護ケアを立てるのが原則です。このまま出力しますか？`)){
+      log('print_blocked_missing_care',{count:missing.length}); return;
+    }
+  }
   const png=cy.png({full:true,scale:2,bg:'#ffffff',maxWidth:1600});
   const diags=diagnosisOrder.map((id,i)=>`<li><b>#${i+1}</b>　${esc(cy.getElementById(id).data('base'))}</li>`).join('');
+  // E ごとの看護計画一覧
+  const Es=cy.nodes().filter(n=>(n.data('ntype')==='speech'||n.data('ntype')==='data') && nodeRole(n)==='E');
+  const careList=Es.map(n=>{ const k=careOf(n);
+    return `<li><b>E</b> ${esc(n.data('base'))} — ${k.length?k.join('・'):'<span style="color:#9a3b34">計画未設定</span>'}</li>`; }).join('');
   const task=esc(document.getElementById('taskAnswer').value||'（未記入）');
   const now=new Date().toLocaleString('ja-JP');
   const w=window.open('','_blank'); if(!w){ alert('ポップアップがブロックされました。印刷を許可してください。'); return; }
@@ -616,12 +736,13 @@ document.getElementById('printBtn').onclick=()=>{
     .fig{width:100%;border:1px solid #d8d2c4;border-radius:6px}.fig img{width:100%;display:block}
     .lg{font-size:11px;color:#6b6459;margin:6px 0 14px;display:flex;gap:16px;flex-wrap:wrap}
     h2{font-size:13px;letter-spacing:.08em;border-bottom:1px solid #d8d2c4;padding-bottom:3px;margin:14px 0 6px}
-    ol.d{list-style:none;padding:0;font-size:13px}ol.d li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}
+    ol.d,ul.c{list-style:none;padding:0;font-size:13px}ol.d li,ul.c li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}ul.c b{color:#c15a2e;margin-right:6px}
     .task{font-size:13px;line-height:1.7;white-space:pre-wrap;background:#faf9f5;border:1px solid #d8d2c4;border-radius:6px;padding:10px}</style></head><body>
     <h1>関連図</h1><div class="meta">作成日時: ${now}</div>
     <div class="fig"><img src="${png}"></div>
-    <div class="lg"><span>■患者情報　■発話・主観　■客観データ　■看護診断（二重枠）</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━E（原因・関連因子）</span><span style="color:#2e8b8b">━S（症状・徴候）</span></div>
+    <div class="lg"><span>■患者情報　■発話・主観　■客観データ　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━E（原因・関連因子）</span><span style="color:#2e8b8b">━S（症状・徴候）</span></div>
     ${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}
+    ${careList?`<h2>原因（E）に対する看護計画（OP/TP/EP）</h2><ul class="c">${careList}</ul>`:''}
     <h2>この構造から導いた看護課題</h2><div class="task">${task}</div></body></html>`);
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); }; log('export_print',{nodes:cy.nodes().length,edges:cy.edges().length});
 };
