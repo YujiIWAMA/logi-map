@@ -3,6 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  (function () {
+    var params = new URLSearchParams(location.search);
+    // 「PC版で見る」を選んだ人は振り分けない
+    if (params.get('view') === 'pc') {
+      try { localStorage.setItem('forcePC', '1'); } catch (e) {}
+      return;
+    }
+    var forcePC = false;
+    try { forcePC = localStorage.getItem('forcePC') === '1'; } catch (e) {}
+    // 画面が狭く、かつタッチ操作の端末をスマホとみなす
+    var isPhone = window.matchMedia('(max-width: 767px) and (pointer: coarse)').matches;
+    if (isPhone && !forcePC) {
+      location.replace('./m/');   // スマホ版（ヒント集）へ
+    }
+  })();
+</script>
+
 <title>関連図 — 全体像をつなぐ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <style>
