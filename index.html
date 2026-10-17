@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>看護展開演習- 関連図</title>
+<title>関連図ワークベンチ — 全体像をつなぐ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <style>
   :root{
@@ -12,6 +12,7 @@
     --patient:#3d4a70; --patient-bg:#e9edf7;   /* 患者情報: この図の主体 */
     --speech:#2f6f9f;  --speech-bg:#e3eef6;
     --data:#3f8a5c;    --data-bg:#e2efe7;
+    --info:#2f7d8c;    --info-bg:#e3f0f1;       /* 情報: 現象・症状・原因など（主観/客観データ付き） */
     --diag:#3a362f;    --diag-bg:#efece3;       /* 看護診断: 結論 */
     --care:#7b5aa6;    --care-bg:#efe9f7;       /* 看護ケア: OP/TP/EP */
     --accent:#9a3b34;  --proposed:#9b8cc4; --edge:#5a5449;
@@ -46,7 +47,16 @@
   .seg button{border:1px solid var(--rule);background:#fff;border-radius:7px;padding:8px 4px;font-size:11.5px;
     cursor:pointer;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s;}
   .seg button .dot{width:10px;height:10px;border-radius:50%;flex:none}
-  .seg button[data-t="patient"]{grid-column:1 / -1}
+  .seg button[data-t="patient"],.seg button[data-t="info"]{grid-column:1 / -1}
+  .seg button[data-t="info"] .dot{background:var(--info);border-radius:50%}
+  .seg button.locked{opacity:.5;cursor:not-allowed}
+  .seg button.flash{animation:kflash .5s 2}
+  @keyframes kflash{50%{box-shadow:0 0 0 4px rgba(154,59,52,.45);border-color:var(--accent)}}
+  .supp-lab{font-size:11.5px;color:var(--ink);margin:8px 0 3px;line-height:1.5}
+  .supp-lab .sk{display:inline-block;font-size:10.5px;color:#fff;border-radius:4px;padding:0 6px;margin-right:4px;font-weight:700}
+  .supp-lab .sk.s{background:#2f6f9f}.supp-lab .sk.o{background:#3f8a5c}
+  .supp-lab .sub{display:block;color:var(--ink-soft);font-size:11px}
+  #suppInput textarea{margin-bottom:2px}
   .seg button[data-t="patient"] .dot{background:var(--patient);border-radius:2px}
   .seg button[data-t="speech"] .dot{background:var(--speech)}
   .seg button[data-t="data"] .dot{background:var(--data)}
@@ -213,6 +223,21 @@
   ::-webkit-scrollbar{width:9px} ::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
 
   /* 作法トースト（結線ブロック時の通知） */
+  #suppModal{display:none;position:fixed;inset:0;z-index:95;background:rgba(35,32,27,.45);align-items:center;justify-content:center}
+  #suppModal.on{display:flex}
+  .sm-box{position:relative;background:#fff;border-radius:12px;padding:18px 20px;width:min(440px,92vw);max-height:90vh;overflow:auto;box-shadow:var(--shadow)}
+  .sm-x{position:absolute;right:10px;top:8px;border:none;background:none;font-size:20px;cursor:pointer;color:var(--ink-soft)}
+  .sm-ttl{font-family:"Yu Mincho",serif;font-weight:700;font-size:15px;margin-bottom:8px;padding-right:20px}
+  .sm-list{margin-bottom:10px}
+  .sm-item{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.6;padding:5px 0;border-bottom:1px solid var(--rule-soft)}
+  .sm-item .sk{flex:none;font-size:10.5px;color:#fff;border-radius:4px;padding:0 6px;margin-top:2px}
+  .sm-item .sk.s{background:#2f6f9f}.sm-item .sk.o{background:#3f8a5c}
+  .sm-item .t{flex:1}.sm-item .d{border:none;background:none;color:var(--accent);cursor:pointer;font-size:12px}
+  .sm-empty{font-size:12px;color:var(--ink-soft)}
+  .sm-add{margin-top:5px;border:none;border-radius:7px;padding:7px 12px;font-size:12.5px;color:#fff;cursor:pointer;font-family:inherit}
+  .sm-add.s{background:#2f6f9f}.sm-add.o{background:#3f8a5c}
+  body.coaching #phaseGuide{display:none !important}
+  #coach.on ~ #toastWrap{top:84px;bottom:auto}
   #toastWrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;
     display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:none;width:min(560px,92vw)}
   .toast{pointer-events:auto;background:#fff;border:1px solid var(--rule);border-left:5px solid var(--accent);
@@ -234,65 +259,42 @@
   .unlinked li .tip{display:block;margin-top:2px;color:#8a3b33;font-size:11.5px;line-height:1.55}
   .unlinked li::before{content:none}
 
-  /* ===== チュートリアル（本画面とは別の全画面。専用キャンバス）===== */
   header .tutbtn{margin-left:10px;border:1px solid var(--rule);background:#fff;color:var(--ink);border-radius:999px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit}
   header .tutbtn:hover{background:var(--rule-soft)}
-  #tutorial{position:fixed;inset:0;z-index:60;background:var(--paper);display:none;grid-template-rows:auto 1fr}
-  #tutorial.on{display:grid}
-  .tut-head{display:flex;align-items:center;gap:14px;padding:10px 20px;border-bottom:1px solid var(--rule);background:#fbfaf6}
-  .tut-head .ttl{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-weight:700;font-size:16px;letter-spacing:.03em}
-  .tut-head .tag{font-size:11px;color:#fff;background:var(--accent);border-radius:999px;padding:2px 10px}
-  .tut-prog{width:200px;height:6px;background:var(--rule-soft);border-radius:3px;overflow:hidden}
-  .tut-prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
-  .tut-prog-n{font-size:11.5px;color:var(--ink-soft)}
-  .tut-skip{margin-left:auto;border:1px solid var(--rule);background:#fff;border-radius:8px;padding:6px 14px;font-size:12.5px;cursor:pointer;font-family:inherit;color:var(--ink)}
-  .tut-skip:hover{background:var(--rule-soft)}
-  .tut-body{display:grid;grid-template-columns:400px 1fr;min-height:0}
-  .tut-left{overflow-y:auto;padding:16px;border-right:1px solid var(--rule);background:#fbfaf6;display:flex;flex-direction:column;gap:14px}
-  .tut-case{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:12px 14px}
-  .tut-case h3,.tut-card h3{font-size:11px;letter-spacing:.14em;color:var(--ink-soft);margin-bottom:6px}
-  .tut-case .story{font-size:13px;line-height:1.85}
-  .tut-case .story mark{background:#fdf0d5;border-radius:3px;padding:0 2px}
-  .tut-chips{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-  .tut-chip{display:flex;gap:8px;align-items:center;text-align:left;border:1.5px solid var(--rule);background:#fff;border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit;color:var(--ink);cursor:default;opacity:.45;pointer-events:none}
-  .tut-chip .ty{flex:none;font-size:10.5px;border-radius:4px;padding:1px 6px;color:#fff;font-weight:700}
-  .tut-chip.active{opacity:1;pointer-events:auto;cursor:pointer;border-color:#e0902a;box-shadow:0 0 0 4px rgba(224,144,42,.25);animation:tutpulse 1.1s ease-in-out infinite}
-  .tut-chip.placed{opacity:.85;border-color:var(--rule);background:#f1efe8}
-  .tut-chip.placed::after{content:"✓ 置いた";margin-left:auto;font-size:11px;color:var(--data)}
-  @keyframes tutpulse{50%{box-shadow:0 0 0 8px rgba(224,144,42,.08)}}
-  .tut-card{background:#fff;border:2px solid #e0902a;border-radius:10px;padding:12px 14px}
-  .tut-card.shake{animation:tutshake .3s}
-  @keyframes tutshake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-  .tut-card .stp{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em}
-  .tut-card .tt{font-family:"Yu Mincho",serif;font-size:16px;font-weight:700;margin:2px 0 6px}
-  .tut-card .bd{font-size:13px;line-height:1.8}
-  .tut-card .bd b{color:var(--accent)}
-  .tut-card .act{margin-top:8px;padding:8px 10px;background:#fdf0d5;border-radius:7px;font-size:12.8px;line-height:1.7}
-  .tut-card .res{margin-top:8px;padding:8px 10px;background:#e2efe7;border-radius:7px;font-size:12.8px;line-height:1.7}
-  .tut-card .nudge{margin-top:8px;font-size:12px;color:var(--accent);min-height:1em}
-  .tut-card .btns{display:flex;gap:8px;margin-top:10px}
-  .tut-next{border:none;background:var(--ink);color:var(--paper);border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit}
-  .tut-next:disabled{opacity:.3;cursor:default}
-  .tut-next.pulse{animation:tutpulse 1.1s ease-in-out infinite;box-shadow:0 0 0 4px rgba(224,144,42,.25)}
-  .tut-sec{border:1px solid var(--rule);background:#fff;color:var(--ink);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit}
-  .tut-right{position:relative;min-height:0;overflow:hidden}
-  #tutCy{position:absolute;inset:0;background:radial-gradient(circle at 1px 1px,var(--rule-soft) 1px,transparent 0) 0 0/22px 22px,var(--paper)}
-  .tut-state{position:absolute;right:12px;bottom:12px;width:270px;background:#ffffffee;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;font-size:12px;z-index:3}
-  .tut-state h3{font-size:11px;letter-spacing:.14em;color:var(--ink-soft);margin-bottom:5px}
-  .tut-state ul{list-style:none}
-  .tut-state li{display:flex;gap:6px;margin:2px 0;color:var(--ink-soft)}
-  .tut-state li.done{color:var(--data)}
-  .tut-state .pct{font-family:"Yu Mincho",serif;font-size:20px;font-weight:700;color:var(--ink)}
-  .tut-empty{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);color:var(--ink-soft);font-size:14px;letter-spacing:.06em;pointer-events:none;z-index:2}
-  .tut-note{position:absolute;left:12px;bottom:12px;z-index:3;font-size:11.5px;color:var(--ink-soft);background:#ffffffdd;border:1px solid var(--rule);border-radius:8px;padding:6px 10px}
-  @media (max-width:900px){ .tut-body{grid-template-columns:1fr;grid-template-rows:auto 1fr} .tut-left{max-height:46vh;border-right:none;border-bottom:1px solid var(--rule)} .tut-state{display:none} }
+  /* ===== チュートリアル（本番画面のまま誘導）===== */
+  #coach{position:fixed;inset:0;z-index:70;display:none;pointer-events:none}
+  #coach.on{display:block}
+  #coach .cb{position:fixed;background:rgba(35,32,27,.52);pointer-events:auto}
+  #coach.clear .cb{background:rgba(35,32,27,.06)}
+  #cring{position:fixed;border:3px solid #e0902a;border-radius:10px;pointer-events:none;display:none;
+    box-shadow:0 0 0 5px rgba(224,144,42,.25);animation:cpulse 1.1s ease-in-out infinite}
+  @keyframes cpulse{50%{box-shadow:0 0 0 11px rgba(224,144,42,.07)}}
+  #ccard{position:fixed;width:350px;max-width:calc(100vw - 24px);background:#fff;border:2px solid #e0902a;border-radius:12px;
+    padding:12px 14px;pointer-events:auto;box-shadow:0 10px 34px rgba(0,0,0,.28);max-height:calc(100vh - 24px);overflow:auto}
+  #ccard.shake{animation:cshake .3s}
+  @keyframes cshake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  #ccard .cstp{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center}
+  #ccard .cprog{flex:1;height:5px;background:var(--rule-soft);border-radius:3px;margin:0 10px;overflow:hidden}
+  #ccard .cprog i{display:block;height:100%;background:var(--accent)}
+  #ccard .ctt{font-family:"Yu Mincho",serif;font-size:15.5px;font-weight:700;margin:5px 0 5px}
+  #ccard .cbd{font-size:12.8px;line-height:1.75}
+  #ccard .cbd b{color:var(--accent)}
+  #ccard .cact{margin-top:8px;padding:7px 10px;background:#fdf0d5;border-radius:7px;font-size:12.6px;line-height:1.65}
+  #ccard .cres{margin-top:8px;padding:7px 10px;background:#e2efe7;border-radius:7px;font-size:12.6px;line-height:1.65}
+  #ccard .cnudge{margin-top:6px;font-size:12px;color:var(--accent);min-height:1em}
+  #ccard .cbtns{display:flex;gap:8px;align-items:center;margin-top:8px}
+  #ccard .cnext{border:none;background:var(--ink);color:var(--paper);border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit}
+  #ccard .cnext:disabled{opacity:.28;cursor:default}
+  #ccard .cnext.pulse{animation:cpulse 1.1s ease-in-out infinite;box-shadow:0 0 0 4px rgba(224,144,42,.25)}
+  #ccard .csec{border:1px solid var(--rule);background:#fff;color:var(--ink);border-radius:8px;padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  #ccard .cskip{margin-left:auto;border:none;background:none;color:var(--ink-soft);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit}
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>関連図</h1>
-    <div class="sub">情報を置き、つながりを判断し、全体像をとらえる</div>
+    <h1>関連図ワークベンチ</h1>
+    <div class="sub">情報を置き、つながりを判断し、全体像から看護課題を導く</div>
   </div>
   <div class="phase">
     <span class="on" id="ph-input">① 情報入力</span>
@@ -306,9 +308,8 @@
   <section class="panel left">
     <div class="eyebrow">情報を置く</div>
     <div class="seg" id="typeSeg">
-      <button data-t="patient"><span class="dot"></span>患者情報</button>
-      <button data-t="speech" class="on"><span class="dot"></span>発話・主観</button>
-      <button data-t="data"><span class="dot"></span>客観データ</button>
+      <button data-t="patient" class="on"><span class="dot"></span>患者情報</button>
+      <button data-t="info"><span class="dot"></span>情報（症状・原因など）</button>
       <button data-t="diagnosis"><span class="dot"></span>看護診断</button>
       <button data-t="care"><span class="dot"></span>看護ケア</button>
     </div>
@@ -321,17 +322,24 @@
       </div>
       <textarea id="careText" rows="2" placeholder="例: 食後2時間の血糖値を測定する"></textarea>
     </div>
-    <div id="singleInput">
-      <textarea id="nodeText" rows="2" placeholder="例:「夜になると不安で眠れない」"></textarea>
+    <div id="singleInput" style="display:none">
+      <textarea id="nodeText" rows="2" placeholder="情報の名前（例: 呼吸苦）"></textarea>
+      <div id="suppInput">
+        <div class="supp-lab"><span class="sk s">主観</span>患者が語ったこと・感じていること<span class="sub">例:「少し歩くだけで苦しい」</span></div>
+        <textarea id="subjText" rows="2" placeholder="なければ空欄"></textarea>
+        <div class="supp-lab"><span class="sk o">客観</span>測った・観察した・検査でわかったこと<span class="sub">例: トイレ歩行後に呼吸数30回に上昇</span></div>
+        <textarea id="objText" rows="2" placeholder="なければ空欄"></textarea>
+        <div class="hint" style="margin-top:6px">迷ったら：患者本人のことば・訴え ➔ 主観／自分や機器で確かめた事実・数値 ➔ 客観</div>
+      </div>
     </div>
-    <div id="patientInput" style="display:none">
+    <div id="patientInput">
       <input type="text" id="pName" placeholder="氏名（例: 山田 太郎）">
       <input type="text" id="pAge" placeholder="年齢（例: 72）">
       <input type="text" id="pDisease" placeholder="病名（例: 2型糖尿病）">
     </div>
 
     <button class="addbtn" id="addNode">＋ 図に置く</button>
-    <div class="hint" id="typeHint">患者が語ったことば。主観情報として、そのまま記録します。</div>
+    <div class="hint" id="typeHint">この関連図の主体。氏名・年齢・病名を枠として記録します。最初に1つだけ置きます。</div>
 
     <div class="divider"></div>
 
@@ -374,12 +382,11 @@
     </div>
     <div class="empty-hint" id="emptyHint">
       <span class="big">まだ何も置かれていません</span>
-      左のパネルから、患者情報・発話・客観データ・看護診断・看護ケアを置いてみましょう。
+      左のパネルから、まず患者情報を置き、続けて情報・看護診断・看護ケアを置いてみましょう。
     </div>
     <div class="legend">
       <span><span class="sw" style="background:var(--patient)"></span>患者情報</span>
-      <span><span class="sw" style="background:var(--speech)"></span>発話・主観</span>
-      <span><span class="sw" style="background:var(--data)"></span>客観データ</span>
+      <span><span class="sw" style="background:var(--info)"></span>情報（主観・客観データ付き）</span>
       <span><span class="sw diag"></span>看護診断（二重枠）</span>
       <span><span class="sw" style="background:var(--care)"></span>看護ケア（OP/TP/EP）＝二重線で原因へ</span>
       <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>E 原因・関連因子</span>
@@ -426,33 +433,22 @@
   <div id="reviewBody"></div>
 </div></div>
 
-<div id="tutorial" role="dialog" aria-label="使い方チュートリアル">
-  <div class="tut-head">
-    <span class="ttl">使い方チュートリアル</span>
-    <span class="tag">練習用の画面です。いまの図・保存データには影響しません</span>
-    <div class="tut-prog"><i id="tutProg"></i></div><span class="tut-prog-n" id="tutProgN"></span>
-    <button class="tut-skip" id="tutSkip">スキップして実践画面へ（Esc）</button>
-  </div>
-  <div class="tut-body">
-    <div class="tut-left">
-      <div class="tut-card" id="tutCard"></div>
-      <div class="tut-case">
-        <h3>拾える情報（光っているものだけ押せます）</h3>
-        <div class="tut-chips" id="tutChips"></div>
-      </div>
-      <div class="tut-case">
-        <h3>症例</h3>
-        <div class="story" id="tutStory"></div>
-      </div>
-    </div>
-    <div class="tut-right">
-      <div id="tutCy"></div>
-      <div class="tut-empty" id="tutEmpty">ここに関連図ができていきます</div>
-      <div class="tut-state" id="tutState"></div>
-    </div>
-  </div>
+<div id="coach" role="dialog" aria-label="使い方チュートリアル">
+  <div class="cb" id="cbT"></div><div class="cb" id="cbB"></div><div class="cb" id="cbL"></div><div class="cb" id="cbR"></div>
+  <div id="cring"></div>
+  <div id="ccard"></div>
 </div>
-
+<div id="suppModal"><div class="sm-box">
+  <button class="sm-x" id="suppClose" aria-label="閉じる">×</button>
+  <div class="sm-ttl" id="suppTitle"></div>
+  <div class="sm-list" id="suppList"></div>
+  <div class="supp-lab"><span class="sk s">主観</span>患者が語ったこと・感じていること</div>
+  <textarea id="suppSubj" rows="2" placeholder="例:「少し歩くだけで苦しい」"></textarea>
+  <button class="sm-add s" id="suppAddS">主観データとして追加</button>
+  <div class="supp-lab" style="margin-top:10px"><span class="sk o">客観</span>測った・観察した・検査でわかったこと</div>
+  <textarea id="suppObj" rows="2" placeholder="例: トイレ歩行後に呼吸数30回に上昇"></textarea>
+  <button class="sm-add o" id="suppAddO">客観データとして追加</button>
+</div></div>
 <div class="ctxmenu" id="ctxMenu"></div>
 <div id="toastWrap"></div>
 
@@ -464,6 +460,7 @@
 
 const TYPE_META = {
   patient:   {border:'#3d4a70', bgvar:'--patient-bg', hint:'この関連図の主体。氏名・年齢・病名を枠として記録します。'},
+  info:      {border:'#2f7d8c', bgvar:'--info-bg',    hint:'何が起きているかを短い名前で（例：呼吸苦）。その根拠になる「主観データ」「客観データ」を添えられます。あとから右クリックでも追加できます。'},
   speech:    {border:'#2f6f9f', bgvar:'--speech-bg',  hint:'患者が語ったことば。主観情報として、そのまま記録します。'},
   data:      {border:'#3f8a5c', bgvar:'--data-bg',    hint:'検査値・バイタル・観察事実など。測定・観察された客観情報です。'},
   diagnosis: {border:'#3a362f', bgvar:'--diag-bg',    hint:'全体像から導いた結論。二重枠で表示され、複数あるときは優先順位（＃）をつけられます。'},
@@ -471,9 +468,10 @@ const TYPE_META = {
 };
 const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-let currentType='speech', nodeSeq=0, diagnosisOrder=[];
+let currentType='patient', nodeSeq=0, diagnosisOrder=[];
 const interactionLog=[];
-function log(a,p){ interactionLog.push({t:Date.now(),action:a,...p}); scheduleAutosave(); }
+let tutActive=false;   // チュートリアル中は、作図ログ・自動保存に書き込まない
+function log(a,p){ if(tutActive) return; interactionLog.push({t:Date.now(),action:a,...p}); scheduleAutosave(); }
 
 /* ---- Cytoscape ---- */
 /* 本画面とチュートリアルで共用するスタイル */
@@ -486,10 +484,13 @@ const CY_STYLE=[
     { selector:'node[ntype="patient"]', style:{
         'text-justification':'left','padding':'14px','font-size':'12.5px','text-max-width':'190px'}},
     { selector:'node[ntype="diagnosis"]', style:{'border-style':'double','border-width':5,'padding':'15px','font-weight':'bold'}},
+    { selector:'node[ntype="info"]', style:{'text-justification':'left','text-max-width':'190px'}},
     { selector:'node[ntype="care"]', style:{'shape':'round-tag','border-width':2,'padding':'11px','font-size':'12px'}},
     { selector:'node.needcare', style:{'border-color':'#9a3b34','border-width':3}},
     { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
     { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
+    { selector:'node.hl', style:{'underlay-color':'#e0902a','underlay-opacity':.35,'underlay-padding':8,'border-color':'#e0902a'}},
+    { selector:'node.hl.hlb', style:{'underlay-opacity':.12,'underlay-padding':16}},
     { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
     /* 直交ルーティング・ラベルなし。始点はJSで分散。 */
     { selector:'edge', style:{
@@ -554,11 +555,12 @@ cy.on('layoutstop',spreadEndpoints);
 let linkSource=null;
 cy.on('tap','node',evt=>{
   const n=evt.target;
+  if(!coachAllowNodeTap(n)) return;
   if(linkSource&&linkSource.id()!==n.id()){ addEdge(linkSource.id(),n.id(),{potential:false}); linkSource.unselect(); linkSource=null; }
   else if(linkSource&&linkSource.id()===n.id()){ linkSource=null; }
   else linkSource=n;
 });
-cy.on('tap','edge',evt=>{ const e=evt.target; e.toggleClass('potential'); e.data('actual',!e.hasClass('potential')); log('toggle_edge',{id:e.id()}); });
+cy.on('tap','edge',evt=>{ if(tutActive) return; const e=evt.target; e.toggleClass('potential'); e.data('actual',!e.hasClass('potential')); log('toggle_edge',{id:e.id()}); });
 cy.on('tap',evt=>{ if(evt.target===cy){ linkSource=null; hideCtx(); } });
 
 /* ============================================================
@@ -577,6 +579,7 @@ document.addEventListener('click',e=>{ if(!ctx.contains(e.target)) hideCtx(); })
 window.addEventListener('scroll',hideCtx,true);
 
 cy.on('cxttap','edge',evt=>{
+  if(tutActive) return;
   const e=evt.target, oe=evt.originalEvent; evt.preventDefault&&evt.preventDefault();
   ctx.innerHTML='';
   const role=e.data('pes');
@@ -595,6 +598,11 @@ cy.on('cxttap','edge',evt=>{
 cy.on('cxttap','node',evt=>{
   const n=evt.target, oe=evt.originalEvent;
   ctx.innerHTML='';
+  if(tutActive) return;
+  if(isInfoNode(n)){
+    ctx.appendChild(mkbtn('根拠データ（主観・客観）を追加・編集…',()=>{ hideCtx(); openSupp(n.id()); }));
+    ctx.appendChild(sep());
+  }
   const label = n.data('ntype')==='patient' ? '患者情報を削除'
               : n.data('ntype')==='diagnosis' ? '看護診断を削除' : 'ノードを削除';
   ctx.appendChild(mkbtn(label,()=>{
@@ -610,17 +618,32 @@ cy.on('cxttap',evt=>{ if(evt.target===cy) hideCtx(); });
 
 /* ---- 型セグメント（患者情報・看護ケアは専用フォームに切替）---- */
 let careKind='OP';
-document.getElementById('typeSeg').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b) return;
-  document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on'); currentType=b.dataset.t;
-  document.getElementById('typeHint').textContent=TYPE_META[currentType].hint;
-  const pt=currentType==='patient', ca=currentType==='care';
+const NODETEXT_PH={info:'情報の名前（例: 呼吸苦）',diagnosis:'看護診断名（例: 非効果的呼吸パターン）'};
+function selectType(t){
+  document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
+  currentType=t;
+  document.getElementById('typeHint').textContent=TYPE_META[t].hint;
+  const pt=t==='patient', ca=t==='care', inf=t==='info';
   document.getElementById('patientInput').style.display=pt?'block':'none';
   document.getElementById('careInput').style.display=ca?'block':'none';
   document.getElementById('singleInput').style.display=(pt||ca)?'none':'block';
-  (pt?document.getElementById('pName'):ca?document.getElementById('careText'):document.getElementById('nodeText')).focus();
+  document.getElementById('suppInput').style.display=inf?'block':'none';
+  if(NODETEXT_PH[t]) document.getElementById('nodeText').placeholder=NODETEXT_PH[t];
+}
+document.getElementById('typeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b||b.disabled||b.classList.contains('locked')) return;
+  selectType(b.dataset.t);
+  (currentType==='patient'?document.getElementById('pName'):currentType==='care'?document.getElementById('careText'):document.getElementById('nodeText')).focus();
+  coachEvent('type_selected',{type:currentType});
 });
+/* 患者情報は1つだけ：入力済みの間は再選択できない */
+function syncPatientLock(){
+  const has=cy.nodes('[ntype="patient"]').length>0;
+  const b=document.querySelector('#typeSeg [data-t="patient"]');
+  b.classList.toggle('locked',has); b.setAttribute('aria-disabled',has?'true':'false');
+  b.innerHTML='<span class="dot"></span>'+(has?'患者情報（入力済み）':'患者情報');
+  if(has && currentType==='patient') selectType('info');
+}
 /* OP/TP/EP の選択 */
 document.getElementById('careSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -637,7 +660,7 @@ function patientLabel(name,age,disease){
   L.push('病名: '+(disease||'―'));
   return L.join('\n');
 }
-function addNode(type,payload){
+function addNode(type,payload,opts){
   const id='n'+(++nodeSeq), m=TYPE_META[type];
   let base,label,extra={};
   if(type==='patient'){
@@ -646,21 +669,41 @@ function addNode(type,payload){
     extra={pname:payload.name,page:payload.age,pdisease:payload.disease};
   }else if(type==='care'){
     base=payload.text; extra={carekind:payload.carekind};
-    label=payload.carekind+': '+payload.text;   // OP:/TP:/EP: を頭に付与
+    label=wrapJa(payload.carekind+': '+payload.text);   // OP:/TP:/EP: を頭に付与
+  }else if(type==='info'){
+    base=payload.text; label=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))};
   }else{ base=payload.text; label=payload.text; }
-  cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},
-    position:{x:120+Math.random()*260,y:90+Math.random()*240}});
+  const pos=(opts&&opts.pos)||{x:120+Math.random()*260,y:90+Math.random()*240};
+  cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},position:pos});
   if(type==='diagnosis'){ diagnosisOrder.push(id); relabelDiagnoses(); renderDiagnoses(); }
-  log('add_node',{id,type,carekind:extra.carekind}); refresh(); return id;
+  log('add_node',{id,type,carekind:extra.carekind,supp:extra.supp?extra.supp.length:undefined}); refresh();
+  coachEvent('node_added',{id,type});
+  return id;
+}
+/* 患者情報がないまま他の情報を置こうとしたときのエラー（画面からの操作のみ） */
+function blockAdd(reason){
+  log('blocked_add',{reason,type:currentType});
+  showToast(KATA.noPatient);
+  const b=document.querySelector('#typeSeg [data-t="patient"]');
+  if(b){ b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash'); }
+  coachEvent('add_blocked',{reason});
 }
 document.getElementById('addNode').addEventListener('click',()=>{
+  if(!coachAllowAdd(currentType)) return;
+  if(currentType!=='patient' && cy.nodes('[ntype="patient"]').length===0){ blockAdd('no_patient'); return; }
   if(currentType==='patient'){
+    if(cy.nodes('[ntype="patient"]').length>0) return;     // 患者情報は1つだけ
     const name=pName.value.trim(),age=pAge.value.trim(),disease=pDisease.value.trim();
     if(!name&&!age&&!disease) return;
-    addNode('patient',{name,age,disease}); pName.value=pAge.value=pDisease.value=''; pName.focus();
+    addNode('patient',{name,age,disease}); pName.value=pAge.value=pDisease.value='';
   }else if(currentType==='care'){
     const ta=document.getElementById('careText'); const v=ta.value.trim(); if(!v) return;
     addNode('care',{text:v,carekind:careKind}); ta.value=''; ta.focus();
+  }else if(currentType==='info'){
+    const ta=document.getElementById('nodeText'), sj=document.getElementById('subjText'), ob=document.getElementById('objText');
+    const v=ta.value.trim(); if(!v) return;
+    const supp=[]; if(sj.value.trim()) supp.push({k:'subj',t:sj.value.trim()}); if(ob.value.trim()) supp.push({k:'obj',t:ob.value.trim()});
+    addNode('info',{text:v,supp}); ta.value=sj.value=ob.value=''; ta.focus();
   }else{
     const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
     addNode(currentType,{text:v}); ta.value=''; ta.focus();
@@ -669,6 +712,40 @@ document.getElementById('addNode').addEventListener('click',()=>{
 document.getElementById('careText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) document.getElementById('addNode').click(); });
 document.getElementById('nodeText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) document.getElementById('addNode').click(); });
 document.getElementById('pDisease').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addNode').click(); });
+
+/* ---- 根拠データ（主観・客観）の追加・編集モーダル ---- */
+let suppId=null;
+const suppModal=document.getElementById('suppModal');
+function openSupp(id){
+  suppId=id; renderSupp(); suppModal.classList.add('on');
+  document.getElementById('suppSubj').value=''; document.getElementById('suppObj').value='';
+  document.getElementById('suppSubj').focus();
+}
+function closeSupp(){ suppModal.classList.remove('on'); suppId=null; }
+function renderSupp(){
+  const n=cy.getElementById(suppId); if(n.empty()){ closeSupp(); return; }
+  document.getElementById('suppTitle').textContent='根拠データ：'+n.data('base');
+  const sp=n.data('supp')||[];
+  document.getElementById('suppList').innerHTML = sp.length
+    ? sp.map((x,i)=>`<div class="sm-item"><span class="sk ${x.k==='subj'?'s':'o'}">${x.k==='subj'?'主観':'客観'}</span><span class="t">${esc(x.t)}</span><button class="d" data-i="${i}">削除</button></div>`).join('')
+    : '<div class="sm-empty">まだ根拠データがありません。下から追加できます。</div>';
+}
+function addSupp(kind){
+  const n=cy.getElementById(suppId); if(n.empty()) return;
+  const ta=document.getElementById(kind==='subj'?'suppSubj':'suppObj'); const v=ta.value.trim(); if(!v) return;
+  n.data('supp',[...(n.data('supp')||[]),{k:kind,t:v}]); ta.value='';
+  log('add_supp',{id:suppId,kind}); refresh(); renderSupp();
+}
+document.getElementById('suppAddS').onclick=()=>addSupp('subj');
+document.getElementById('suppAddO').onclick=()=>addSupp('obj');
+document.getElementById('suppList').addEventListener('click',e=>{
+  const b=e.target.closest('button.d'); if(!b) return;
+  const n=cy.getElementById(suppId); const sp=[...(n.data('supp')||[])]; sp.splice(+b.dataset.i,1); n.data('supp',sp);
+  log('delete_supp',{id:suppId}); refresh(); renderSupp();
+});
+document.getElementById('suppClose').onclick=closeSupp;
+suppModal.addEventListener('click',e=>{ if(e.target===suppModal) closeSupp(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&suppModal.classList.contains('on')) closeSupp(); });
 
 /* ---- 作法トースト ---- */
 function showToast(html, ms=7000){
@@ -687,6 +764,7 @@ const KATA={
   fromDiag:`<span class="lead"><b>【関連図の作法】</b></span>看護診断は、集まった情報（EやS）から導き出した「結論」です。診断名から他の情報へ矢印を伸ばすことはありません。矢印の向きを逆に（<b>情報 ➔ 看護診断</b>）してみましょう。`,
   toCare:`<span class="lead"><b>【関連図の作法】</b></span>看護計画（OP/TP/EP）は、原因に「働きかける」ものです。原因から看護ケアへ矢印を引くのではなく、<b>看護ケア ➔ 働きかける原因</b>の向き（二重線）で結びましょう。`,
   careTarget:`<span class="lead"><b>【関連図の作法】</b></span>看護ケアの矢印は、働きかける<b>原因（E）や症状（S）</b>へ向けます。患者情報・看護診断・他の看護ケアへは結びません。`,
+  noPatient:`<span class="lead"><b>【関連図の作法】</b></span>関連図は<b>患者</b>を起点に描きます。まず「患者情報」（氏名・年齢・病名）を置いてから、情報・看護診断・看護ケアを置きましょう。`,
   toPatient:`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`
 };
 /* ---- エッジ（PESの作法バリデーション付き）---- */
@@ -697,7 +775,7 @@ function addEdge(s,t,{potential=false}={}){
   // 作法①: 看護診断(P)から矢印を出させない（主客逆転の防止）
   if(sn.data('ntype')==='diagnosis'){
     log('blocked_edge',{reason:'source_is_diagnosis',source:s,target:t});
-    showToast(KATA.fromDiag);
+    showToast(KATA.fromDiag); coachEvent('edge_blocked',{source:s,target:t});
     return false;
   }
   // 作法②: 患者情報へ矢印を入れさせない（前提・起点だから）
@@ -721,6 +799,7 @@ function addEdge(s,t,{potential=false}={}){
   if(cy.edges(`[source="${s}"][target="${t}"]`).length) return false;
   cy.add({group:'edges',data:{id:'e_'+s+'_'+t,source:s,target:t,actual:!potential},classes:potential?'potential':''});
   log('add_edge',{source:s,target:t,potential});
+  coachEvent('edge_added',{source:s,target:t});
   if(cy.edges().length && document.getElementById('ph-input').classList.contains('on')) setPhase('link');
   refresh(); scheduleSpread();
   return true;
@@ -735,7 +814,7 @@ function addEdge(s,t,{potential=false}={}){
    ・看護ケア(OP/TP/EP)は「看護ケア ➔ 働きかける原因」の向き（二重線）。連鎖の判定には含めない
    ・Eに対して介入（看護ケア）を考える。Eを細かく分解するほど看護ケアも具体的になる。分解したら「看護で予防・対策できるか」を一つずつ考える。共同問題もEとして扱う
    ============================================================ */
-const isInfoNode=n=>n.data('ntype')==='speech'||n.data('ntype')==='data';
+const isInfoNode=n=>{ const t=n.data('ntype'); return t==='info'||t==='speech'||t==='data'; };
 /* 図全体を解析：node id → {role:'S'|'E', level}。S=0、E1=1、E2=2…（複数経路は最短を採用） */
 function analyzePES(c){
   const info={}, q=[];
@@ -797,6 +876,26 @@ function chainDepthTo(d,info){
       seen.add(s.id()); max=Math.max(max,info[s.id()].level+1); q.push(s); }); }
   return max;
 }
+/* 日本語は空白がなく自動で折り返されないため、全角約14文字で改行を入れる（半角は0.55文字分）*/
+function wrapJa(str,limit){
+  limit=limit||14; const out=[];
+  String(str).split('\n').forEach(line=>{
+    let cur='',w=0; const chars=[...line];
+    chars.forEach((ch,i)=>{
+      const cw=/[\x00-\x7f\uff61-\uff9f]/.test(ch)?0.55:1;
+      const rest=chars.length-i;   // 残り2文字以下なら折り返さない（1文字だけの行を作らない）
+      if(w+cw>limit && cur && rest>2 && !/[、。，．）」』】,.)]/.test(ch)){ out.push(cur); cur=''; w=0; }
+      cur+=ch; w+=cw;
+    });
+    out.push(cur);
+  });
+  return out.join('\n');
+}
+/* 情報ノードの表示文字：[E1: ]情報名 ＋ 主観・客観データの行 */
+function infoLabelText(n,tag){
+  const sp=n.data('supp')||[];
+  return wrapJa([(tag?tag+': ':'')+n.data('base'), ...sp.map(x=>(x.k==='subj'?'主観：':'客観：')+x.t)].join('\n'));
+}
 function updatePES(c,quiet){
   c=c||cy;
   const info=analyzePES(c);
@@ -816,7 +915,7 @@ function updatePES(c,quiet){
   c.nodes().forEach(n=>{
     if(!isInfoNode(n)) return;
     const r=info[n.id()];
-    const want = r ? pesTagOf(r.role,r.level)+': '+n.data('base') : n.data('base');
+    const want = infoLabelText(n, r ? pesTagOf(r.role,r.level) : '');
     if(n.data('label')!==want) n.data('label',want);
   });
   uncoveredRoots(c).forEach(r=>r.addClass('needcare'));   // 介入点のない連鎖の起点を強調
@@ -938,6 +1037,7 @@ function buildReview(){
   const adds=L.filter(e=>e.action==='add_node');
   const edges=L.filter(e=>e.action==='add_edge');
   const blocks=L.filter(e=>e.action==='blocked_edge');
+  const addBlocks=L.filter(e=>e.action==='blocked_add');
   const dels=L.filter(e=>e.action==='delete_edge'||e.action==='delete_node');
   const toggles=L.filter(e=>e.action==='toggle_edge');
   const reorders=L.filter(e=>e.action==='reorder_diagnosis');
@@ -965,10 +1065,10 @@ function buildReview(){
   cards.push({cls:'dir',k:'推論の方向',v:s2,d:d2});
   // 3 作法のつまずき
   let s3,d3;
-  if(blocks.length===0){ s3='つまずきなし'; d3='PESの向き（E→S→P、患者情報は起点）の作法に反する操作はありませんでした。'; }
+  if(blocks.length+addBlocks.length===0){ s3='つまずきなし'; d3='PESの向き（E→S→P、患者情報は起点）の作法に反する操作はありませんでした。'; }
   else { const bySrc=blocks.filter(b=>b.reason==='source_is_diagnosis').length, byTgt=blocks.filter(b=>b.reason==='target_is_patient').length, byCare=blocks.filter(b=>b.reason==='target_is_care'||b.reason==='care_to_non_info').length;
-    const parts=[]; if(bySrc)parts.push(`看護診断から矢印を出そうとした操作が${bySrc}回`); if(byTgt)parts.push(`患者情報へ矢印を入れようとした操作が${byTgt}回`); if(byCare)parts.push(`看護ケアの向き（看護ケア ➔ 原因）に反する操作が${byCare}回`);
-    s3=`気づきの機会 ${blocks.length}回`; d3=parts.join('、')+'ありました。作法の通知を受けて向きを見直せていれば、それ自体がPES構造の学びになっています。'; }
+    const parts=[]; if(bySrc)parts.push(`看護診断から矢印を出そうとした操作が${bySrc}回`); if(byTgt)parts.push(`患者情報へ矢印を入れようとした操作が${byTgt}回`); if(byCare)parts.push(`看護ケアの向き（看護ケア ➔ 原因）に反する操作が${byCare}回`); if(addBlocks.length)parts.push(`患者情報より先に他の情報を置こうとした操作が${addBlocks.length}回`);
+    s3=`気づきの機会 ${blocks.length+addBlocks.length}回`; d3=parts.join('、')+'ありました。作法の通知を受けて向きを見直せていれば、それ自体がPES構造の学びになっています。'; }
   cards.push({cls:'stumble',k:'作法のつまずき',v:s3,d:d3});
   // 4 試行錯誤
   const rev=dels.length+toggles.length+reorders.length, denom=Math.max(1,edges.length+adds.length);
@@ -994,6 +1094,7 @@ function buildReview(){
 /* ---- 未接続ノードの型別ヒント（PES構造への気づきを促す）---- */
 function unlinkedTip(ntype){
   switch(ntype){
+    case 'info':
     case 'speech':
     case 'data':
       return '➔ これは何の「症状（S）」または「原因（E）」になり得ますか？ 関連する項目や看護診断へ繋いでみましょう。';
@@ -1022,14 +1123,15 @@ function refresh(){
       return `<li><span class="nm">${nm}</span><span class="tip">${unlinkedTip(n.data('ntype'))}</span></li>`;
     }).join(''); }
   else box.style.display='none';
+  syncPatientLock();
   updatePES();          // 結線位置からE/Sを自動判定＋介入点のない連鎖の強調
   renderCare();         // E ごとの OP/TP/EP 点検
   renderDiagnoses();
   renderGauge();        // A: PESの作法 達成度
 }
 const PHASE_GUIDE={
-  input:{step:'STEP 1 ／ アセスメント', html:'左のパネルから <b>患者情報・発話（S）・客観データ（S）・看護診断（P）・看護ケア（OP/TP/EP）</b> を置きましょう。'},
-  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてタップ＝線を引く。<b>E（原因）→ … → S（症状）→ P（診断）</b> の向きで繋ぎ、看護ケアは<b>看護ケア ➔ 働きかける原因</b>（二重線）で結びます。<b>Eに対して介入を考える</b>のが看護ケアの考え方。Eを分解したら「看護で予防や対策ができるか？」を一つずつ考えましょう。Pに直接入るのがS、Sより上流はE1・E2…と自動表示されます。原因と症状の間の「途中の変化」を省略せず挟みましょう。線をタップ＝実線⇄点線。'},
+  input:{step:'STEP 1 ／ アセスメント', html:'まず <b>患者情報</b> を置き、続けて <b>情報（主観・客観データ付き）・看護診断（P）・看護ケア（OP/TP/EP）</b> を置きましょう。'},
+  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてクリック＝線を引く。<b>E（原因）→…→S（症状）→P（診断）</b>の向きで繋ぎ、看護ケアは<b>看護ケア ➔ 働きかけるE</b>（二重線）。原因と症状の間の「途中の変化」を省略せず挟みましょう。'},
   reflect:{step:'STEP 3 ／ 看護診断・看護計画の点検', html:'右で <b>各Pが S（症状）に、SがE（原因の連鎖）に支えられ、介入するEに看護計画（OP/TP/EP）がある</b> かを点検し、優先順位（＃）を整えて、図を完成させましょう。'}
 };
 function setPhase(p){
@@ -1066,7 +1168,7 @@ const SAVE_VERSION=1;
 function serialize(){
   const nodes=cy.nodes().map(n=>({
     data:{ id:n.id(), base:n.data('base'), ntype:n.data('ntype'),
-      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease') },
+      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), supp:n.data('supp') },
     position:{ x:n.position('x'), y:n.position('y') }
   }));
   const edges=cy.edges().map(e=>({
@@ -1097,13 +1199,14 @@ document.getElementById('openFile').addEventListener('change',ev=>{
   };
   rd.readAsText(f); ev.target.value='';
 });
-function loadData(d){
+/* 図の内容を差し替える（ログには触れない。チュートリアルの退避/復元でも使う）*/
+function applyData(d){
   cy.elements().remove();
   const nodes=d.nodes.map(n=>{
     const m=TYPE_META[n.data.ntype]||TYPE_META.data;
     let label;
     if(n.data.ntype==='patient') label=patientLabel(n.data.pname,n.data.page,n.data.pdisease);
-    else if(n.data.ntype==='care') label=(n.data.carekind||'OP')+': '+n.data.base;
+    else if(n.data.ntype==='care') label=wrapJa((n.data.carekind||'OP')+': '+n.data.base);
     else label=n.data.base;
     return { group:'nodes', data:{ ...n.data, label, bg:cssVar(m.bgvar), border:m.border }, position:n.position };
   });
@@ -1119,6 +1222,9 @@ function loadData(d){
   diagnosisOrder=(d.diagnosisOrder||[]).filter(id=>!cy.getElementById(id).empty());
   relabelDiagnoses();
   refresh(); spreadEndpoints(); cy.fit(null,50);
+}
+function loadData(d){
+  applyData(d);
   // 保存時までの操作ログを引き継ぐ（再保存しても、それまでの作図プロセスが失われないように）
   if(Array.isArray(d.interactionLog)){ interactionLog.length=0; interactionLog.push(...d.interactionLog); }
   log('load_json',{nodes:cy.nodes().length,edges:cy.edges().length});
@@ -1245,236 +1351,241 @@ window.addEventListener('load',()=>{ document.getElementById('nodeText').focus()
    ============================================================ */
 
 /* ============================================================
-   チュートリアル（本画面とは別の全画面。専用キャンバス tcy を使う）
-   ・本画面の cy / interactionLog / 自動保存には一切触れない（ログは tutorial_* のみ）
-   ・光っている操作だけが有効。Esc／スキップでいつでも終了
+   チュートリアル（本番画面のまま誘導）
+   ・実際の画面の上に「光っている所だけ押せる」覆いをかぶせて、操作を順に案内する
+   ・開始時に、いまの図（と作図ログ）を退避し、終了すると元に戻す
+   ・チュートリアル中の操作は、作図ログ・自動保存に残さない（tutorial_start / complete / exit だけ記録）
    ============================================================ */
-const TUT_LABEL={patient:'患者情報',speech:'発話',data:'客観データ',diagnosis:'看護診断',care:'看護ケア'};
-const TUT_ITEMS={
-  p: {type:'patient',  name:'田中 花子', age:'78', disease:'慢性心不全', pos:{x:110,y:30}},
-  d: {type:'diagnosis',text:'転倒転落リスク状態',            pos:{x:920,y:190}},
-  s: {type:'speech',   text:'足の裏の感覚が鈍い',            pos:{x:650,y:190}},
-  e1:{type:'data',     text:'両下肢の浮腫',                  pos:{x:380,y:190}},
-  e2:{type:'data',     text:'心機能の低下',                  pos:{x:110,y:190}},
-  c1:{type:'care',     carekind:'OP',text:'浮腫の程度を観察する', pos:{x:380,y:340}},
-  c2:{type:'care',     carekind:'TP',text:'下肢を挙上する',            pos:{x:380,y:40}}
-};
-const TUT_STORY='田中 花子さん（78歳）は<mark>慢性心不全</mark>で入院中です。心臓のはたらきが弱く、<mark>両下肢に浮腫</mark>があります。本人は「<mark>足の裏の感覚が鈍くて、床を踏んでいる感じがしない</mark>」と話し、夜間はトイレまで歩いて行きます。';
-const TUT_STEPS=[
- {kind:'read', title:'この症例を関連図にしてみましょう',
-  body:'とても単純な症例です。関連図は、<b>患者のどんな情報が、どんな問題につながるのか</b>を矢印で示す図です。今回は看護診断を「転倒転落リスク状態」として、その<b>根拠と原因を省略せず順にたどる</b>練習をします。',
-  act:'左下の症例を読んで、「次へ」を押してください。'},
- {kind:'place', item:'p', title:'① 患者を起点に置く',
-  body:'関連図は、いつも<b>患者</b>から始まります。氏名・年齢・病名を枠として置きます。',
-  act:'光っている「患者情報」をクリックして、図に置きましょう。',
-  res:'患者情報が置けました。矢印は患者から他の情報へ向かい、患者へ戻ることはありません。'},
- {kind:'place', item:'d', title:'② 結論（看護診断 P）を置く',
-  body:'ふだんは情報を集めてから診断を導きますが、今回は流れをつかむため、先にゴールの<b>看護診断（P）</b>を置きます。二重の枠が看護診断です。',
-  act:'光っている「転倒転落リスク状態」をクリック。',
-  res:'看護診断は、集まった情報から導いた「結論」です。ここから、その根拠をさかのぼっていきます。'},
- {kind:'place', item:'s', title:'③ S：診断の直接の根拠を置く',
-  body:'「転倒しそうだ」と判断する<b>直接の根拠</b>になる症状・徴候が <b>S</b> です。患者の発話や観察した事実から選びます。',
-  act:'光っている「足の裏の感覚が鈍い」をクリック。',
-  res:'患者の言葉（発話）を、そのまま記録して置けました。'},
- {kind:'link', from:'s', to:'d', title:'④ S ➔ P をつなぐ',
-  body:'<b>看護診断に直接入る情報が S</b> です。ノードを<b>2つ続けてクリック</b>すると、1本目から2本目へ線が引かれます。',
-  act:'①「足の裏の感覚が鈍い」→②「転倒転落リスク状態」の順にクリック。',
-  res:'線が引かれ、ノードの頭に<b>「S:」</b>の印がつきました。「Pに直接入る情報＝S」と自動で判定されます。'},
- {kind:'try', from:'d', to:'s', title:'⑤ わざと逆向きにつないでみる',
-  body:'診断は結論なので、<b>診断から矢印を出すことはできません</b>。作法を体験するために、わざと逆向きに引いてみます。',
-  act:'①「転倒転落リスク状態」→②「足の裏の感覚が鈍い」の順にクリック（引けないことを確かめます）。',
-  res:'このように【関連図の作法】が教えてくれます。矢印は必ず<b>「情報 ➔ 診断」</b>の向きです。'},
- {kind:'place', item:'e1', title:'⑥ E1：Sの原因を置く',
-  body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」と考えます。両下肢の浮腫が組織を圧迫し、感覚を鈍らせます。Sにつながる原因が <b>E（原因・関連因子）</b>です。',
-  act:'光っている「両下肢の浮腫」をクリック。',
-  res:'客観データ（観察した事実）として置けました。'},
- {kind:'link', from:'e1', to:'s', title:'⑦ E ➔ S をつなぐ',
-  body:'原因から症状へ、<b>原因 ➔ 結果</b>の向きで線を引きます。',
-  act:'①「両下肢の浮腫」→②「足の裏の感覚が鈍い」の順にクリック。',
-  res:'Sの手前の原因は<b>「E1」</b>です。矢印にも（E1：原因・関連因子）と自動表示されました。'},
- {kind:'place', item:'e2', title:'⑧ さらに原因をさかのぼる',
-  body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能が低下し、血液が下肢にうっ滞するためです。<b>原因の原因</b>は E2 です。いきなり「心不全 ➔ 転倒」と書かず、<b>間の変化を一歩ずつ</b>置くのがコツです。Eを細かく分解するほど、看護ケアも具体的にできます。',
-  act:'光っている「心機能の低下」をクリック。',
-  res:'さらに上流の原因が置けました。'},
- {kind:'link', from:'e2', to:'e1', title:'⑨ E2 ➔ E1 をつなぐ',
-  body:'同じく、原因 ➔ 結果の向きで引きます。',
-  act:'①「心機能の低下」→②「両下肢の浮腫」の順にクリック。',
-  res:'連鎖が <b>E2 ➔ E1 ➔ S ➔ P</b> になりました。さかのぼるほど E の数字が増えます。この連鎖が「どこで介入できるか」を教えてくれます。'},
- {kind:'link', from:'p', to:'e2', title:'⑩ 患者から始める',
-  body:'いちばん上流の原因は、患者の病気・背景に由来します。起点の患者情報から E2 へ線を引きます。',
-  act:'①「患者情報」→②「心機能の低下」の順にクリック。',
-  res:'患者から結論まで、1本の道がつながりました。'},
- {kind:'place', item:'c1', title:'⑪ 看護計画を置く（OP）',
-  body:'<b>Eに対して介入を考える</b>のが看護ケアの考え方です。Eを細かく分解すると、その分、看護ケアの内容もより細かく、具体的にできます。Eを分解したら、「これは看護で予防や対策ができるものかな？」と一つ一つ考えましょう。ここでは「両下肢の浮腫」について、「看護で予防や対策ができる」と考え、まず <b>OP（観察計画）</b>を置きます。',
-  act:'光っている「OP：浮腫の程度を観察する」をクリック。',
-  res:'看護計画が置けました。置いただけでは、まだ何にも結びついていません。'},
- {kind:'link', from:'c1', to:'e1', title:'⑫ 看護ケア ➔ 原因 をつなぐ（二重線）',
-  body:'看護計画は<b>原因に対して</b>立てます。矢印は、<b>看護ケアから、働きかける原因（E）へ</b>、二重線で引きます（原因からケアへ引くのではありません）。',
-  act:'①「OP：浮腫の程度を観察する」→②「両下肢の浮腫」の順にクリック。',
-  res:'二重線の矢印でつながりました。看護計画は、このように<b>介入するE</b>に対して立てます。'},
- {kind:'place', item:'c2', title:'⑬ もう1つ看護計画を置く（TP）',
-  body:'同じ原因に、観察（OP）と合わせて、直接働きかける <b>TP（ケア計画）</b>も考えられます。',
-  act:'光っている「TP：下肢を挙上する」をクリック。',
-  res:'もう1つ看護計画が置けました。'},
- {kind:'link', from:'c2', to:'e1', title:'⑭ 看護ケア ➔ 原因 をつなぐ',
-  body:'こちらも、看護ケアから、働きかける原因へ引きます。',
-  act:'①「TP：下肢を挙上する」→②「両下肢の浮腫」の順にクリック。',
-  res:'ひとつの原因に、観察（OP）とケア（TP）を重ねて考えることができました。'},
+const COACH={active:false,idx:0,done:false,ids:{},snap:null,pulse:null,phase:'input',completed:false};
+const cq=sel=>document.querySelector(sel);
+/* 完成図の配置（モデル座標）。置いた順に画面が動かないよう、完成形が収まる倍率に固定する */
+const COACH_POS={ p:{x:60,y:20}, e2:{x:60,y:200}, e1:{x:330,y:200}, s:{x:600,y:200}, d:{x:870,y:200}, c1:{x:330,y:360} };
+const COACH_BOX={x1:-60,y1:-30,x2:980,y2:410};
+
+function cSetPatient(){ pName.value='航空 太郎'; pAge.value='90'; pDisease.value='慢性心不全'; }
+function cSetInfo(name,subj,obj){ nodeText.value=name; subjText.value=subj||''; objText.value=obj||''; }
+function cSetCare(t){ careText.value=t; }
+function cClearForms(){ [pName,pAge,pDisease,nodeText,subjText,objText,careText].forEach(x=>x.value=''); }
+const cCanvasRect=()=>{ const r=cq('#cy').getBoundingClientRect(), t=cq('#stageTop').getBoundingClientRect();
+  return {left:r.left,top:Math.max(r.top,t.bottom+4),right:r.right,bottom:r.bottom,width:r.width,height:r.bottom-Math.max(r.top,t.bottom+4)}; };
+const nm=key=>{ const id=COACH.ids[key]; const n=id&&cy.getElementById(id); return n&&!n.empty()?n.data('base'):''; };
+
+const COACH_STEPS=[
+ {kind:'read', title:'いっしょに1枚描いてみましょう',
+  body:'この画面のまま、模擬患者さんの関連図を1枚描きます。<b>光っている所だけ</b>が押せます。<br><br><b>症例</b>：航空 太郎さん（90歳）。慢性心不全で入院中。心臓のはたらきが弱く、両下肢にむくみがあります。「足の裏が鈍くて、床を踏んでいる感じがしない」と話し、夜間はトイレまで歩いて行きます。<br><br>いまの図は一時的に退避され、終わると元に戻ります。いつでも「スキップ」できます。'},
+ {kind:'click', type:'info', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
+  body:'置くものは4種類です。患者情報、情報（症状・原因など）、看護診断、看護ケア。まず<b>「情報」</b>を選んでみましょう。',
+  act:'光っている「情報（症状・原因など）」を押します。',
+  res:'入力欄が出ました。情報には、<b>名前</b>のほかに、根拠として<b>主観データ</b>（患者が語ったこと）と<b>客観データ</b>（測った・見た事実）を添えられます。'},
+ {kind:'try_add', target:()=>[cq('#singleInput'),cq('#addNode')], enter:()=>cSetInfo('足底の感覚低下','足の裏が鈍くて、床を踏んでいる感じがしない',''),
+  title:'そのまま置いてみる（わざと）',
+  body:'入力欄に例が入っています。<b>患者情報がない状態</b>で、そのまま置くとどうなるか、試してみましょう。',
+  act:'「＋ 図に置く」を押します。',
+  res:'エラーになりました。関連図は<b>患者を起点</b>に描きます。まず患者情報から置きましょう。'},
+ {kind:'click', type:'patient', enter:()=>cClearForms(), target:()=>[cq('#typeSeg [data-t="patient"]')], title:'「患者情報」を選ぶ',
+  body:'最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
+ {kind:'add', nodeType:'patient', key:'p', enter:cSetPatient, target:()=>[cq('#patientInput'),cq('#addNode')], title:'患者情報を入れる',
+  body:'氏名・年齢・病名を入れます。<b>例が入っている</b>ので、そのまま置きましょう（書き換えてもOK）。',
+  act:'「＋ 図に置く」を押します。', res:'患者情報が置けました。'},
+ {kind:'read', target:()=>[cq('#typeSeg')], title:'患者情報は1人に1つ',
+  body:'「患者情報」のボタンが<b>入力済み</b>になり、もう選べなくなりました。患者情報は1つだけです（消すと、また置けます）。「情報」が自動で選ばれています。'},
+ {kind:'click', type:'diagnosis', target:()=>[cq('#typeSeg [data-t="diagnosis"]')], title:'「看護診断」を選ぶ',
+  body:'今回は流れをつかむため、先にゴールの<b>看護診断（P）</b>を置きます。', act:'光っている「看護診断」を押します。', res:'看護診断の入力欄が出ました。'},
+ {kind:'add', nodeType:'diagnosis', key:'d', enter:()=>{ nodeText.value='転倒転落リスク状態'; }, target:()=>[cq('#singleInput'),cq('#addNode')], title:'看護診断を置く',
+  body:'看護診断は、集まった情報から導いた「結論」です。二重の枠で表示されます。',
+  act:'「＋ 図に置く」を押します。', res:'看護診断が置けました。ここから、その根拠をさかのぼります。'},
+ {kind:'click', type:'info', enter:()=>cClearForms(), target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
+  body:'診断の根拠になる情報を置きます。', act:'光っている「情報」を押します。', res:'情報の入力欄に戻りました。'},
+ {kind:'add', nodeType:'info', key:'s', enter:()=>cSetInfo('足底の感覚低下','足の裏が鈍くて、床を踏んでいる感じがしない',''), target:()=>[cq('#singleInput'),cq('#addNode')],
+  title:'S：診断の直接の根拠を置く',
+  body:'「転倒しそうだ」と考える<b>直接の根拠</b>がS（症状・徴候）です。名前は「何が起きているか」を短く。その根拠として、ここでは患者の言葉を<b>主観データ</b>に入れています。測定値などは<b>客観データ</b>に入れます。',
+  act:'「＋ 図に置く」を押します。', res:'情報が置けました。ノードの中に、名前と主観データが入っています。'},
+ {kind:'link', from:'s', to:'d', title:'S ➔ P をつなぐ',
+  body:'<b>看護診断に直接入る情報がS</b>です。ノードを<b>2つ続けてクリック</b>すると、1つ目から2つ目へ線が引かれます。',
+  act:()=>`①「${nm('s')}」→②「${nm('d')}」の順にクリックします。`, res:'線が引かれ、ノードの頭に<b>「S:」</b>の印がつきました。「Pに直接入る情報＝S」と自動で判定されます。'},
+ {kind:'try_link', from:'d', to:'s', title:'わざと逆向きにつなぐ',
+  body:'看護診断は結論なので、<b>診断から矢印を出すことはできません</b>。作法を体験するために、わざと逆向きに引いてみます。',
+  act:()=>`①「${nm('d')}」→②「${nm('s')}」の順にクリックします。`, res:'【関連図の作法】が教えてくれました。矢印は必ず<b>「情報 ➔ 診断」</b>の向きです。'},
+ {kind:'add', nodeType:'info', key:'e1', enter:()=>cSetInfo('両下肢の浮腫','','両下腿に圧痕（＋）。体重が3日間で2kg増加'), target:()=>[cq('#singleInput'),cq('#addNode')],
+  title:'E1：Sの原因を置く',
+  body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」を考えます。両下肢の浮腫が原因です。Sにつながる原因が<b>E（原因・関連因子）</b>です。今度は<b>客観データ</b>だけを添えています（どちらか片方でもOK）。',
+  act:'「＋ 図に置く」を押します。', res:'置けました。'},
+ {kind:'link', from:'e1', to:'s', title:'E ➔ S をつなぐ',
+  body:'原因から症状へ、<b>原因 ➔ 結果</b>の向きで引きます。',
+  act:()=>`①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'Sの手前の原因は<b>「E1」</b>です。矢印にも（E1：原因・関連因子）と自動表示されました。'},
+ {kind:'add', nodeType:'info', key:'e2', enter:()=>cSetInfo('心機能の低下','少し歩くだけで息が切れる','心エコーで駆出率35%'), target:()=>[cq('#singleInput'),cq('#addNode')],
+  title:'さらに原因をさかのぼる',
+  body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能の低下です。原因の原因は<b>E2</b>。「心不全 ➔ 転倒」と一足飛びにせず、間の変化を一歩ずつ置きます。Eを細かく分解するほど、看護ケアも具体的にできます。',
+  act:'「＋ 図に置く」を押します。', res:'置けました。主観データと客観データの両方を添えています。'},
+ {kind:'link', from:'e2', to:'e1', title:'E2 ➔ E1 をつなぐ',
+  body:'同じく、原因 ➔ 結果の向きです。',
+  act:()=>`①「${nm('e2')}」→②「${nm('e1')}」の順にクリックします。`, res:'連鎖が <b>E2 ➔ E1 ➔ S ➔ P</b> になりました。さかのぼるほどEの数字が増えます。'},
+ {kind:'link', from:'p', to:'e2', title:'患者から始める',
+  body:'いちばん上流の原因は、患者の病気・背景に由来します。起点の患者情報から線を引きます。',
+  act:()=>`①「患者情報」→②「${nm('e2')}」の順にクリックします。`, res:'患者から結論まで、1本の道がつながりました。'},
+ {kind:'click', type:'care', enter:()=>cClearForms(), target:()=>[cq('#typeSeg [data-t="care"]')], title:'「看護ケア」を選ぶ',
+  body:'<b>Eに対して介入を考える</b>のが看護ケアの考え方です。Eを分解したら、「これは看護で予防や対策ができるものかな？」と一つ一つ考えましょう。', act:'光っている「看護ケア」を押します。',
+  res:'OP（観察）・TP（ケア）・EP（教育）から選べます。'},
+ {kind:'add', nodeType:'care', key:'c1', enter:()=>cSetCare('浮腫の程度と体重を毎日観察する'), target:()=>[cq('#careInput'),cq('#addNode')], title:'看護ケアを置く',
+  body:'「両下肢の浮腫」は、看護で観察や対策ができます。まず<b>OP（観察計画）</b>を置きます（TP・EPも選べます）。',
+  act:'「＋ 図に置く」を押します。', res:'看護ケアが置けました。置いただけでは、まだ何にもつながっていません。'},
+ {kind:'link', from:'c1', to:'e1', title:'看護ケア ➔ 原因 をつなぐ（二重線）',
+  body:'看護計画は<b>原因に対して</b>立てます。矢印は<b>看護ケアから、働きかけるE</b>へ、二重線で引きます（原因からケアへ引くのではありません）。',
+  act:()=>`①「看護ケア」→②「${nm('e1')}」の順にクリックします。`, res:'二重線の矢印でつながりました。'},
+ {kind:'read', target:()=>[cq('.panel.right')], title:'右のパネルで点検する',
+  body:'右では、<b>PESの作法の達成度</b>、看護計画の過不足、診断ごとの連鎖が自動で確認できます。いま描いた図は、すべて満たしているはずです。'},
  {kind:'end', title:'完成！ 関連図ができました',
-  body:'<b>心機能の低下（E2）➔ 両下肢の浮腫（E1）➔ 足の裏の感覚が鈍い（S）➔ 転倒転落リスク状態（P）</b>。<br>「心不全 ➔ 転倒」の1本線ではなく、途中の変化まで書くことで、Eを細かく分解したことで、看護で予防・対策ができるE（ここでは「両下肢の浮腫」）に、具体的な看護計画を立てられました。<br><br>実践画面では、このほかに <b>右クリック</b>（線の削除・実線⇄点線の切替）、<b>💾保存</b>（続きから再開）、<b>🔎ふりかえる</b>、<b>印刷/PDF</b>が使えます。'}
+  body:'<b>心機能の低下（E2）➔ 両下肢の浮腫（E1）➔ 足底の感覚低下（S）➔ 転倒転落リスク状態（P）</b>。そして、Eに対する看護ケア。<br><br>実践画面では、このほかに<b>右クリック</b>（線の削除・実線⇄点線、ノードへの<b>主観・客観データの追加</b>）、<b>💾保存</b>、<b>🔎ふりかえる</b>、<b>印刷/PDF</b>が使えます。「実践画面へ」を押すと、元の図に戻ります。'}
 ];
-let tcy=null, tutIdx=0, tutDone=false, tutSrc=null, tutPlaced=new Set(), tutTimer=null, tutCompleted=false;
-const tutEl=id=>document.getElementById(id);
 
-function tutOpen(){
-  tutIdx=0; tutDone=false; tutSrc=null; tutPlaced=new Set(); tutCompleted=false;
-  tutEl('tutorial').classList.add('on');
-  tutEl('tutStory').innerHTML=TUT_STORY;
-  tcy=cytoscape({
-    container:tutEl('tutCy'), userZoomingEnabled:false, userPanningEnabled:false, boxSelectionEnabled:false, autoungrabify:true,
-    style:[...CY_STYLE,
-      {selector:'node.hl',style:{'underlay-color':'#e0902a','underlay-opacity':.35,'underlay-padding':8,'border-color':'#e0902a'}},
-      {selector:'node.hl.hlb',style:{'underlay-opacity':.12,'underlay-padding':16}},
-      {selector:'node.picked',style:{'border-color':'#23201b','border-width':4}}],
-    elements:[]
-  });
-  tcy.on('tap','node',tutOnTapNode);
-  tutFit();
-  tutTimer=setInterval(()=>{ if(tcy) tcy.nodes('.hl').toggleClass('hlb'); },550);
-  log('tutorial_start',{});
-  tutRender();
+function coachFitView(){
+  const box=cq('#cy'), w=box.clientWidth, h=box.clientHeight;
+  const bandBottom=Math.max(0,cq('#stageTop').getBoundingClientRect().bottom-box.getBoundingClientRect().top)+8;
+  const x0=10,x1=w-10,y0=bandBottom,y1=h-290;
+  const bw=COACH_BOX.x2-COACH_BOX.x1, bh=COACH_BOX.y2-COACH_BOX.y1;
+  const z=Math.max(.3,Math.min((x1-x0)/bw,(y1-y0)/bh,1.15));
+  cy.resize(); cy.zoom(z);
+  cy.pan({x:x0+((x1-x0)-z*bw)/2-z*COACH_BOX.x1, y:y0+((y1-y0)-z*bh)/2-z*COACH_BOX.y1});
 }
-/* 完成形がちょうど収まる倍率に固定（置いた順に画面が動かないよう、fit は使わず計算で決める）*/
-function tutFit(){
-  if(!tcy) return; tcy.resize();
-  const box=tutEl('tutCy'), w=box.clientWidth, h=box.clientHeight, pad=24;
-  const X1=-10,Y1=-20,X2=1030,Y2=420;
-  const z=Math.max(.3,Math.min((w-2*pad)/(X2-X1),(h-2*pad)/(Y2-Y1),1.3));
-  tcy.zoom(z); tcy.pan({x:(w-z*(X1+X2))/2, y:(h-z*(Y1+Y2))/2});
-}
-function tutClose(reason){
-  if(!tutEl('tutorial').classList.contains('on')) return;
-  if(!tutCompleted) log('tutorial_exit',{step:tutIdx+1,total:TUT_STEPS.length,reason:reason||'skip'});
-  clearInterval(tutTimer); tutTimer=null;
-  if(tcy){ tcy.destroy(); tcy=null; }
-  tutEl('tutorial').classList.remove('on');
-  const b=tutEl('tutBtn'); if(b) b.focus();
-}
-function tutNudge(msg){
-  const el=document.querySelector('#tutCard .nudge'); if(el) el.textContent=msg||'';
-  if(msg){ const c=tutEl('tutCard'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
-}
-function tutNodeLabel(key){ const it=TUT_ITEMS[key]; return it.type==='patient'?'患者情報':(it.type==='care'?it.carekind+'：'+it.text:it.text); }
 
-function tutPlace(key){
-  const it=TUT_ITEMS[key], m=TYPE_META[it.type];
-  let base,label,extra={};
-  if(it.type==='patient'){ base='患者情報（'+it.name+'）'; label=patientLabel(it.name,it.age,it.disease); }
-  else if(it.type==='care'){ base=it.text; label=it.carekind+': '+it.text; extra={carekind:it.carekind}; }
-  else{ base=it.text; label=it.text; }
-  tcy.add({group:'nodes',data:{id:key,base,label,ntype:it.type,bg:cssVar(m.bgvar),border:m.border,...extra},position:{...it.pos}});
-  tutPlaced.add(key);
-  updatePES(tcy,true); spreadEndpointsOf(tcy);
+function coachStart(){
+  if(COACH.active) return;
+  closeSupp(); hideCtx();
+  document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click());
+  COACH.snap=serialize();
+  COACH.phase=['input','link','reflect'].find(x=>document.getElementById('ph-'+x).classList.contains('on'))||'input';
+  interactionLog.push({t:Date.now(),action:'tutorial_start'});
+  document.body.classList.add('coaching');
+  tutActive=true; COACH.active=true; COACH.idx=0; COACH.done=false; COACH.ids={}; COACH.completed=false;
+  cy.elements().remove(); diagnosisOrder=[]; nodeSeq=0; linkSource=null;
+  cClearForms(); selectType('patient'); refresh(); setPhase('input');
+  cy.userPanningEnabled(false); cy.userZoomingEnabled(false); cy.autoungrabify(true);
+  coachFitView();
+  cq('#coach').classList.add('on');
+  COACH.pulse=setInterval(()=>cy.nodes('.hl').toggleClass('hlb'),550);
+  coachEnter();
 }
-/* 本画面の addEdge と同じ作法チェック（メッセージは共通の KATA）*/
-function tutAddEdge(s,t){
-  const sn=tcy.getElementById(s), tn=tcy.getElementById(t);
-  if(sn.data('ntype')==='diagnosis'){ showToast(KATA.fromDiag); return false; }
-  if(tn.data('ntype')==='patient'){ showToast(KATA.toPatient); return false; }
-  if(tn.data('ntype')==='care'){ showToast(KATA.toCare); return false; }
-  if(sn.data('ntype')==='care' && !isInfoNode(tn)){ showToast(KATA.careTarget); return false; }
-  if(tcy.getElementById('e_'+s+'_'+t).nonempty()) return false;
-  tcy.add({group:'edges',data:{id:'e_'+s+'_'+t,source:s,target:t,actual:true}});
-  updatePES(tcy,true); spreadEndpointsOf(tcy);
-  return true;
+function coachEnd(reason){
+  if(!COACH.active) return;
+  clearInterval(COACH.pulse); COACH.pulse=null;
+  cq('#coach').classList.remove('on');
+  document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click());
+  const step=COACH.idx+1, completed=COACH.completed;
+  document.body.classList.remove('coaching');
+  tutActive=false; COACH.active=false;
+  cy.userPanningEnabled(true); cy.userZoomingEnabled(true); cy.autoungrabify(false);
+  cy.nodes().removeClass('hl hlb');
+  applyData(COACH.snap);                      // 退避しておいた図を元に戻す
+  cClearForms(); selectType(cy.nodes('[ntype="patient"]').length?'info':'patient');
+  setPhase(COACH.phase);
+  interactionLog.push(completed?{t:Date.now(),action:'tutorial_complete'}:{t:Date.now(),action:'tutorial_exit',step,total:COACH_STEPS.length,reason:reason||'skip'});
+  COACH.snap=null; scheduleAutosave();
+  const b=cq('#tutBtn'); if(b) b.focus();
 }
-function tutOnTapNode(evt){
-  const st=TUT_STEPS[tutIdx];
-  if(!st||tutDone||(st.kind!=='link'&&st.kind!=='try')){ if(!tutDone&&st&&st.kind!=='end') tutNudge('いまは図を触る場面ではありません。光っている部分を操作してください。'); return; }
-  const id=evt.target.id();
-  if(!tutSrc){
-    if(id===st.from){ tutSrc=id; evt.target.addClass('picked'); tutNudge(''); }
-    else tutNudge('光っている「'+tutNodeLabel(st.from)+'」から先にクリックしましょう。');
-    return;
+function coachEnter(){
+  const st=COACH_STEPS[COACH.idx];
+  COACH.done=false;
+  cy.elements().unselect(); linkSource=null;
+  if(st.enter) st.enter();
+  if(st.kind==='end'){ COACH.completed=true; }
+  coachRender();
+}
+function coachDone(){ COACH.done=true; coachRender(); }
+
+/* 画面からの通知（本体コードが呼ぶ）。いま案内している操作が行われたら、次へ進める状態にする */
+function coachEvent(name,d){
+  if(!COACH.active||COACH.done) return;
+  const st=COACH_STEPS[COACH.idx]; let ok=false;
+  switch(st.kind){
+    case 'click': ok=(name==='type_selected'&&d.type===st.type); break;
+    case 'add': if(name==='node_added'&&d.type===st.nodeType){
+        COACH.ids[st.key]=d.id; cy.getElementById(d.id).position({...COACH_POS[st.key]}); spreadEndpoints(); ok=true; } break;
+    case 'try_add': ok=(name==='add_blocked'); break;
+    case 'link': ok=(name==='edge_added'&&d.source===COACH.ids[st.from]&&d.target===COACH.ids[st.to]); break;
+    case 'try_link': ok=(name==='edge_blocked'&&d.source===COACH.ids[st.from]&&d.target===COACH.ids[st.to]); break;
   }
-  if(id===tutSrc){ tutSrc=null; evt.target.removeClass('picked'); return; }
-  if(id!==st.to){ tutNudge('2つ目は「'+tutNodeLabel(st.to)+'」です。'); return; }
-  tcy.nodes().removeClass('picked'); tutSrc=null;
-  if(st.kind==='link'){ tutAddEdge(st.from,st.to); }
-  else{ tutAddEdge(st.from,st.to); }       // try：引けない（作法トーストが出る）ことが目的
-  tutComplete();
+  if(ok){ COACH.done=true; coachRender(); }
 }
-function tutComplete(){
-  tutDone=true; if(tcy) tcy.nodes().removeClass('hl hlb picked');
-  tutRender();
+/* 「図に置く」を押してよい場面か */
+function coachAllowAdd(type){
+  if(!COACH.active) return true;
+  const st=COACH_STEPS[COACH.idx];
+  if(COACH.done) return false;
+  if(st.kind==='try_add') return true;
+  if(st.kind==='add' && type===st.nodeType) return true;
+  coachNudge('いまは光っている操作だけ押せます。'); return false;
 }
-function tutChecks(){
-  const real=tcy.nodes(), info=analyzePES(tcy);
-  const diags=real.filter(n=>n.data('ntype')==='diagnosis');
-  const S=real.filter(n=>info[n.id()]&&info[n.id()].role==='S');
-  const E=real.filter(n=>info[n.id()]&&info[n.id()].role==='E');
-  return [
-    {label:'看護診断（P）を置いた', ok:diags.length>0},
-    {label:'P に S（症状）がつながる', ok:diags.length>0&&diags.every(d=>d.incomers('edge').length>0)},
-    {label:'S に E（原因の連鎖）がつながる', ok:S.length>0&&S.every(s=>s.incomers('edge').length>0)},
-    {label:'各連鎖に、介入するEの看護計画', ok:chainRoots(tcy).length>0&&uncoveredRoots(tcy).length===0},
-    {label:'孤立した情報がない', ok:real.length>0&&real.every(n=>n.degree()>0)}];
+/* 図のノードをクリックしてよい場面か（つなぐ操作のとき、光っている2つだけ・順番どおり） */
+function coachAllowNodeTap(n){
+  if(!COACH.active) return true;
+  const st=COACH_STEPS[COACH.idx];
+  if(COACH.done||(st.kind!=='link'&&st.kind!=='try_link')){ coachNudge('いまは図のノードを触る場面ではありません。'); return false; }
+  const from=COACH.ids[st.from], to=COACH.ids[st.to];
+  if(!linkSource){ if(n.id()===from) return true; coachNudge('光っている「'+n.cy().getElementById(from).data('base')+'」から先にクリックしましょう。'); return false; }
+  if(n.id()===to||n.id()===linkSource.id()) return true;
+  coachNudge('2つ目は光っている「'+n.cy().getElementById(to).data('base')+'」です。'); return false;
 }
-function tutRender(){
-  const st=TUT_STEPS[tutIdx], N=TUT_STEPS.length;
-  tutEl('tutProg').style.width=Math.round(tutIdx/(N-1)*100)+'%';
-  tutEl('tutProgN').textContent=(tutIdx+1)+' / '+N;
-  // 選択肢（チップ）
-  tutEl('tutChips').innerHTML='';
-  Object.keys(TUT_ITEMS).forEach(key=>{
-    const it=TUT_ITEMS[key], b=document.createElement('button'); b.type='button'; b.className='tut-chip'; b.dataset.key=key;
-    const active=st.kind==='place'&&st.item===key&&!tutDone;
-    if(tutPlaced.has(key)) b.classList.add('placed'); else if(active) b.classList.add('active');
-    b.innerHTML=`<span class="ty" style="background:${TYPE_META[it.type].border}">${TUT_LABEL[it.type]}</span><span>${esc(it.type==='patient'?it.name+'さん・'+it.age+'歳・'+it.disease:(it.type==='care'?it.carekind+'：'+it.text:it.text))}</span>`;
-    if(active) b.onclick=()=>{ tutPlace(key); tutComplete(); };
-    tutEl('tutChips').appendChild(b);
-    if(active) setTimeout(()=>{ try{ b.scrollIntoView({block:'nearest'}); }catch(e){} },0);
-  });
-  // 図の強調（つなぐ操作のとき、2つのノードを光らせる）
-  if(tcy){
-    tcy.nodes().removeClass('hl hlb picked');
-    if((st.kind==='link'||st.kind==='try')&&!tutDone){ tcy.getElementById(st.from).addClass('hl'); tcy.getElementById(st.to).addClass('hl'); }
-    tutSrc=null;
+function coachNudge(msg){
+  const el=cq('#ccard .cnudge'); if(el) el.textContent=msg||'';
+  if(msg){ const c=cq('#ccard'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
+}
+
+function coachRender(){
+  const st=COACH_STEPS[COACH.idx], N=COACH_STEPS.length, last=st.kind==='end';
+  cy.nodes().removeClass('hl hlb');
+  if((st.kind==='link'||st.kind==='try_link')&&!COACH.done){
+    [COACH.ids[st.from],COACH.ids[st.to]].forEach(id=>cy.getElementById(id).addClass('hl'));
   }
-  // 手順カード
-  const lastStep=st.kind==='end';
-  const nextLabel = lastStep ? '' : '次へ ▶';
-  const canNext = st.kind==='read' || tutDone;
-  tutEl('tutCard').innerHTML=`
-    <div class="stp">STEP ${tutIdx+1} ／ ${N}</div>
-    <div class="tt">${st.title}</div>
-    <div class="bd">${st.body}</div>
-    ${(!lastStep&&!tutDone&&st.act)?`<div class="act">▶ ${st.act}</div>`:''}
-    ${(tutDone&&st.res)?`<div class="res">✓ ${st.res}</div>`:''}
-    <div class="nudge"></div>
-    <div class="btns">
-      ${lastStep?`<button class="tut-next pulse" id="tutGo">実践画面へ</button><button class="tut-sec" id="tutAgain">もう一度やってみる</button>`
-                :`<button class="tut-next ${canNext?'pulse':''}" id="tutNext" ${canNext?'':'disabled'}>${nextLabel}</button>`}
+  const act=typeof st.act==='function'?st.act():st.act;
+  const canNext = st.kind==='read'||COACH.done;
+  cq('#ccard').innerHTML=`
+    <div class="cstp"><span>STEP ${COACH.idx+1}</span><span class="cprog"><i style="width:${Math.round(COACH.idx/(N-1)*100)}%"></i></span><span>${COACH.idx+1} / ${N}</span></div>
+    <div class="ctt">${st.title}</div>
+    <div class="cbd">${st.body}</div>
+    ${(!last&&!COACH.done&&act)?`<div class="cact">▶ ${act}</div>`:''}
+    ${(COACH.done&&st.res)?`<div class="cres">✓ ${st.res}</div>`:''}
+    <div class="cnudge"></div>
+    <div class="cbtns">
+      ${last?`<button class="cnext pulse" id="cGo">実践画面へ</button><button class="csec" id="cAgain">もう一度</button>`
+            :`<button class="cnext ${canNext?'pulse':''}" id="cNext" ${canNext?'':'disabled'}>${st.kind==='read'&&COACH.idx===0?'はじめる ▶':'次へ ▶'}</button>`}
+      <button class="cskip" id="cSkip">${last?'':'スキップ（Esc）'}</button>
     </div>`;
-  if(lastStep){
-    tutEl('tutGo').onclick=()=>tutClose('complete'); tutEl('tutAgain').onclick=()=>{ tutClose('restart'); tutOpen(); };
-    if(!tutCompleted){ tutCompleted=true; log('tutorial_complete',{}); }
-  }else{
-    tutEl('tutNext').onclick=()=>{ if(!canNext) return; document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click()); tutIdx++; tutDone=false; tutRender(); };
-  }
-  tutEl('tutEmpty').style.display=tutPlaced.size?'none':'block';
-  // 状態パネル
-  if(tcy){
-    const cs=tutChecks(), done=cs.filter(c=>c.ok).length;
-    tutEl('tutState').innerHTML=`<h3>PESの作法 達成度（本画面と同じ点検）</h3>
-      <div class="pct">${Math.round(done/cs.length*100)}%</div>
-      <ul>${cs.map(c=>`<li class="${c.ok?'done':''}"><span>${c.ok?'✓':'○'}</span><span>${esc(c.label)}</span></li>`).join('')}</ul>`;
-  }
+  if(last){ cq('#cGo').onclick=()=>coachEnd('complete'); cq('#cAgain').onclick=()=>{ coachEnd('restart'); coachStart(); }; }
+  else{ cq('#cNext').onclick=()=>{ if(!canNext) return; document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click()); COACH.idx++; coachEnter(); }; }
+  cq('#cSkip').onclick=()=>coachEnd('skip');
+  coachLayout();
 }
-tutEl('tutBtn').addEventListener('click',tutOpen);
-tutEl('tutSkip').addEventListener('click',()=>tutClose('skip'));
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&tutEl('tutorial').classList.contains('on')) tutClose('esc'); });
-window.addEventListener('resize',()=>{ if(tcy) tutFit(); });
+function coachLayout(){
+  if(!COACH.active) return;
+  const st=COACH_STEPS[COACH.idx], W=innerWidth, H=innerHeight;
+  let hole=null;
+  const isLink=(st.kind==='link'||st.kind==='try_link');
+  if((st.target||isLink) && !(COACH.done && st.kind!=='read')){
+    const els=isLink?[cCanvasRect()]:st.target();
+    els.forEach(el=>{ if(el.scrollIntoView&&el.closest&&el.closest('.panel')) try{ el.scrollIntoView({block:'nearest'}); }catch(e){} });
+    let L=1e9,T=1e9,R=-1e9,B=-1e9;
+    els.forEach(el=>{ const r=el.getBoundingClientRect?el.getBoundingClientRect():el; L=Math.min(L,r.left); T=Math.min(T,r.top); R=Math.max(R,r.right); B=Math.max(B,r.bottom); });
+    const pad=isLink?0:6;
+    hole={left:Math.max(0,L-pad),top:Math.max(0,T-pad),right:Math.min(W,R+pad),bottom:Math.min(H,B+pad)};
+  }
+  const set=(id,l,t,w,h)=>{ const e=cq(id); e.style.left=l+'px'; e.style.top=t+'px'; e.style.width=Math.max(0,w)+'px'; e.style.height=Math.max(0,h)+'px'; };
+  cq('#coach').classList.toggle('clear',!hole && COACH.idx>0);   // 結果を見せる場面は暗くしない（操作は止めたまま）
+  if(!hole){ set('#cbT',0,0,W,H); set('#cbB',0,0,0,0); set('#cbL',0,0,0,0); set('#cbR',0,0,0,0); cq('#cring').style.display='none'; }
+  else{
+    set('#cbT',0,0,W,hole.top); set('#cbB',0,hole.bottom,W,H-hole.bottom);
+    set('#cbL',0,hole.top,hole.left,hole.bottom-hole.top); set('#cbR',hole.right,hole.top,W-hole.right,hole.bottom-hole.top);
+    const ring=cq('#cring'); ring.style.display=isLink?'none':'block';
+    ring.style.left=(hole.left)+'px'; ring.style.top=hole.top+'px'; ring.style.width=(hole.right-hole.left)+'px'; ring.style.height=(hole.bottom-hole.top)+'px';
+  }
+  // 手順カードは、いつも図の左下（描く場所を隠さない固定位置）。穴なしのときは中央
+  const card=cq('#ccard'), cw=card.offsetWidth, ch=card.offsetHeight, cr=cq('#cy').getBoundingClientRect();
+  if(!hole && COACH.idx===0){ card.style.left=Math.max(12,(W-cw)/2)+'px'; card.style.top=Math.max(12,(H-ch)/2)+'px'; }
+  else{ card.style.left=Math.max(12,Math.min(cr.left+12,W-cw-12))+'px'; card.style.top=Math.max(12,cr.bottom-ch-12)+'px'; }
+}
+cq('#tutBtn').addEventListener('click',coachStart);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&COACH.active&&!suppModal.classList.contains('on')) coachEnd('esc'); });
+window.addEventListener('resize',()=>{ if(COACH.active){ coachFitView(); coachLayout(); } });
+
 </script>
 </body>
 </html>
