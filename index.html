@@ -1499,7 +1499,6 @@ function coachEnter(){
   cy.elements().unselect(); linkSource=null;
   if(st.enter) st.enter();
   if(st.kind==='end'){ COACH.completed=true; }
-  if(COACH.idx===0) COACH.prevRes='';
   coachRender();
 }
 function coachDone(){ COACH.done=true; coachRender(); }
@@ -1516,11 +1515,7 @@ function coachEvent(name,d){
     case 'link': ok=(name==='edge_added'&&d.source===COACH.ids[st.from]&&d.target===COACH.ids[st.to]); break;
     case 'try_link': ok=(name==='edge_blocked'&&d.source===COACH.ids[st.from]&&d.target===COACH.ids[st.to]); break;
   }
-  if(ok){
-    COACH.done=true; coachRender();
-    const at=COACH.idx;
-    setTimeout(()=>{ if(COACH.active&&COACH.idx===at){ if(!st.kind.startsWith('try')) document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click()); COACH.prevRes=st.res||''; COACH.idx++; coachEnter(); } }, st.kind.startsWith('try')?1400:900);
-  }
+  if(ok){ COACH.done=true; coachRender(); }
 }
 /* 「図に置く」を押してよい場面か */
 function coachAllowAdd(type){
@@ -1560,7 +1555,6 @@ function coachRender(){
   const canNext = st.kind==='read'||COACH.done;
   cq('#ccard').innerHTML=`
     <div class="cstp"><span>STEP ${COACH.idx+1}</span><span class="cprog"><i style="width:${Math.round(COACH.idx/(N-1)*100)}%"></i></span><span>${COACH.idx+1} / ${N}</span></div>
-    ${(!COACH.done&&COACH.prevRes)?`<div class="cres" style="margin:4px 0 6px">✓ ${COACH.prevRes}</div>`:''}
     <div class="ctt">${st.title}</div>
     <div class="cbd">${st.body}</div>
     ${(!last&&!COACH.done&&act)?`<div class="cact">▶ ${act}</div>`:''}
@@ -1568,11 +1562,11 @@ function coachRender(){
     <div class="cnudge"></div>
     <div class="cbtns">
       ${last?`<button class="cnext" id="cGo">自分でやってみる ▶</button><button class="csec" id="cAgain">もう一度見る</button>`
-            :(st.kind==='read'?`<button class="cnext" id="cNext">${COACH.idx===0?'はじめる ▶':'次へ ▶'}</button>`:'')}
+            :`<button class="cnext ${canNext?'pulse':''}" id="cNext" ${canNext?'':'disabled'}>${COACH.idx===0?'はじめる ▶':'次へ ▶'}</button>`}
       <button class="cskip" id="cSkip">${last?'':'スキップ（Esc）'}</button>
     </div>`;
   if(last){ cq('#cGo').onclick=()=>coachEnd('complete'); cq('#cAgain').onclick=()=>{ coachEnd('restart'); coachStart(); }; }
-  else if(cq('#cNext')){ cq('#cNext').onclick=()=>{ COACH.prevRes=''; COACH.idx++; coachEnter(); }; }
+  else{ cq('#cNext').onclick=()=>{ if(!canNext) return; document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click()); COACH.idx++; coachEnter(); }; }
   cq('#cSkip').onclick=()=>coachEnd('skip');
   coachLayout();
 }
