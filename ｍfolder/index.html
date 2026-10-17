@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>関連図のヒント</title>
+<style>
+  :root{
+    --paper:#f7f5ef; --ink:#23201b; --ink-soft:#6b6459;
+    --rule:#d8d2c4; --card:#ffffff;
+    --patient:#3d4a70; --patient-bg:#e9edf7;
+    --accent:#2f6f9f; --accent-bg:#e3eef6;
+    --warn:#9a5b1e; --warn-bg:#f8eedd;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#1c1b18; --ink:#ece8df; --ink-soft:#a39d91;
+      --rule:#3a372f; --card:#26241f;
+      --patient:#aab8e6; --patient-bg:#2a3047;
+      --accent:#8cc0e6; --accent-bg:#1f3242;
+      --warn:#e6b07a; --warn-bg:#3a2d1c;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    font-size:16px; line-height:1.75;
+  }
+  header{padding:20px 16px 8px}
+  h1{font-size:1.35rem; margin:0 0 4px}
+  .lead{color:var(--ink-soft); font-size:.9rem; margin:0}
+  main{padding:8px 16px 32px}
+  h2{font-size:1rem; color:var(--ink-soft); margin:24px 0 8px; letter-spacing:.05em}
+  details{
+    background:var(--card); border:1px solid var(--rule); border-radius:10px;
+    margin:0 0 10px; overflow:hidden;
+  }
+  summary{
+    list-style:none; cursor:pointer; padding:14px 40px 14px 14px;
+    font-weight:600; position:relative;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::after{
+    content:"＋"; position:absolute; right:14px; top:13px; color:var(--ink-soft);
+  }
+  details[open] summary::after{content:"－"}
+  .num{
+    display:inline-block; min-width:1.6em; height:1.6em; line-height:1.6em;
+    text-align:center; border-radius:50%; background:var(--patient-bg);
+    color:var(--patient); font-size:.85rem; margin-right:8px;
+  }
+  .body{padding:0 14px 14px; border-top:1px solid var(--rule)}
+  .body p{margin:12px 0 0}
+  .q{
+    background:var(--accent-bg); color:var(--ink); border-radius:8px;
+    padding:10px 12px; margin:12px 0 0; font-size:.95rem;
+  }
+  .q b{color:var(--accent)}
+  .ng{
+    background:var(--warn-bg); border-radius:8px; padding:10px 12px;
+    margin:12px 0 0; font-size:.95rem;
+  }
+  .ng b{color:var(--warn)}
+  ol.chain{list-style:none; padding:0; margin:12px 0 0}
+  ol.chain li{
+    padding:6px 10px; border-left:3px solid var(--accent); margin:0 0 2px;
+    background:var(--paper); border-radius:0 6px 6px 0; font-size:.95rem;
+  }
+  ol.chain li + li::before{content:"↓ "; color:var(--ink-soft)}
+  .pes{display:grid; gap:6px; margin:12px 0 0}
+  .pes div{background:var(--paper); border-radius:6px; padding:8px 10px; font-size:.95rem}
+  .pes b{color:var(--patient)}
+  ul.check{padding-left:0; list-style:none; margin:0}
+  ul.check li{padding:8px 0 8px 28px; border-bottom:1px solid var(--rule); position:relative}
+  ul.check li::before{content:"□"; position:absolute; left:4px; color:var(--ink-soft)}
+  footer{padding:8px 16px 40px; text-align:center}
+  .pc{
+    display:inline-block; padding:10px 20px; border:1px solid var(--rule);
+    border-radius:999px; color:var(--accent); text-decoration:none; font-size:.9rem;
+    background:var(--card);
+  }
+  .note{color:var(--ink-soft); font-size:.8rem; margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>関連図のヒント</h1>
+  <p class="lead">実習中に「どう図にすればいい？」と迷ったときに見返すページです。図を描く作業はPC版で行いましょう。</p>
+</header>
+
+<main>
+  <h2>描く順番</h2>
+
+  <details open>
+    <summary><span class="num">1</span>患者さんを起点に置く</summary>
+    <div class="body">
+      <p>関連図の主体は病気ではなく<strong>患者さん</strong>です。まず中心（または起点）に患者さんを置き、そこから情報を広げます。</p>
+      <div class="q"><b>自分に問う：</b>この情報は「この患者さん」にとってどんな意味がある？ 教科書の病態図を写していない？</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="num">2</span>集めた情報を分類する</summary>
+    <div class="body">
+      <p>情報をいきなり矢印でつながず、まず種類ごとに整理します。</p>
+      <p>例：疾患・治療／検査データ／患者さんの言葉（主観）／観察した事実（客観）／生活・家族・環境</p>
+      <div class="q"><b>自分に問う：</b>その情報は「誰が言ったこと」「何で確かめたこと」？ 主観と客観が混ざっていない？</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="num">3</span>情報に意味づけをする</summary>
+    <div class="body">
+      <p>データをそのまま置くだけでは図になりません。「正常か・異常か」「なぜそうなっているか」を一言で添えます。</p>
+      <div class="q"><b>自分に問う：</b>「Hb 9.2」だけで終わっていない？ それは何を示していて、患者さんの生活にどう影響する？</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="num">4</span>原因から結果へ、省略せずにつなぐ</summary>
+    <div class="body">
+      <p>いちばん多いつまずきは、<strong>原因と結果の間を飛ばしてしまう</strong>ことです。矢印1本の間に「なぜ？」が入るなら、その間を書き出します。</p>
+      <div class="ng"><b>飛ばしすぎの例：</b>心不全 → 転倒転落リスク状態</div>
+      <p>間を埋めると、たとえば次のようになります。</p>
+      <ol class="chain">
+        <li>心不全</li>
+        <li>心拍出量の低下</li>
+        <li>労作時の息切れ・倦怠感、活動量の低下</li>
+        <li>下肢筋力の低下</li>
+        <li>（＋利尿薬による夜間頻尿 → 夜間のトイレ歩行）</li>
+        <li>転倒転落リスク状態</li>
+      </ol>
+      <div class="q"><b>自分に問う：</b>矢印1本ごとに「だから」とつなげて声に出して読める？ 読めないところに中間項目が隠れている。</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="num">5</span>PESでまとめる</summary>
+    <div class="body">
+      <p>つながりが見えたら、看護問題をPESの形で整理します。関連図・アセスメント・看護計画は、この形でつながります。</p>
+      <div class="pes">
+        <div><b>P（問題）</b>：患者さんに起きている／起こりうる状態</div>
+        <div><b>E（原因・関連因子）</b>：その状態を引き起こしているもの</div>
+        <div><b>S（症状・徴候）</b>：Pがあると判断した根拠となるデータ</div>
+      </div>
+      <div class="q"><b>自分に問う：</b>Pの根拠になるSは図の中にある？ Eは<strong>看護で働きかけられるもの</strong>になっている？（「心不全」そのものは看護で取り除けない）</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="num">6</span>看護計画につなげ、優先順位をつける</summary>
+    <div class="body">
+      <p>看護計画は<strong>Eに働きかける</strong>ことで組み立てます。図の中で複数の問題につながっているEは、優先度が高い手がかりになります。</p>
+      <div class="q"><b>自分に問う：</b>計画の各項目は、図のどのEを減らす・支えるもの？ 図とつながらない計画が混ざっていない？</div>
+    </div>
+  </details>
+
+  <h2>提出前のセルフチェック</h2>
+  <details>
+    <summary>チェックリストを開く</summary>
+    <div class="body">
+      <ul class="check">
+        <li>患者さんが起点になっている</li>
+        <li>主観的情報と客観的情報を区別している</li>
+        <li>データに意味づけを添えている</li>
+        <li>矢印を「だから」で読んでも飛躍がない</li>
+        <li>各Pに根拠となるSがつながっている</li>
+        <li>Eが看護で働きかけられる内容になっている</li>
+        <li>看護計画が図のEに対応している</li>
+      </ul>
+    </div>
+  </details>
+</main>
+
+<footer>
+  <a class="pc" href="../?view=pc">PC版で開く</a>
+  <p class="note">関連図の作成はPC・タブレットの大きな画面での利用を想定しています。</p>
+</footer>
+</body>
+</html>
