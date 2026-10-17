@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>関連図ワークベンチ — 全体像をつなぐ</title>
+<title>関連図 — 全体像をつなぐ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <style>
   :root{
@@ -264,11 +264,16 @@
   /* ===== チュートリアル（本番画面のまま誘導）===== */
   #coach{position:fixed;inset:0;z-index:70;display:none;pointer-events:none}
   #coach.on{display:block}
-  #coach .cb{position:fixed;background:rgba(35,32,27,.52);pointer-events:auto}
+  #coach .cb{position:fixed;background:rgba(20,18,15,.66);pointer-events:auto}
   #coach.clear .cb{background:rgba(35,32,27,.06)}
-  #cring{position:fixed;border:3px solid #e0902a;border-radius:10px;pointer-events:none;display:none;
-    box-shadow:0 0 0 5px rgba(224,144,42,.25);animation:cpulse 1.1s ease-in-out infinite}
+  #cring{position:fixed;border:2px solid #e8a33d;border-radius:10px;pointer-events:none;display:none;
+    box-shadow:0 0 10px 2px rgba(232,163,61,.45);animation:cglow 2.4s ease-in-out infinite}
+  @keyframes cglow{0%,100%{box-shadow:0 0 8px 1px rgba(232,163,61,.35)}50%{box-shadow:0 0 14px 4px rgba(232,163,61,.55)}}
   @keyframes cpulse{50%{box-shadow:0 0 0 11px rgba(224,144,42,.07)}}
+  #ctag{position:fixed;display:none;pointer-events:none;background:#ff8c00;color:#fff;font-weight:700;font-size:13px;
+    padding:4px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap;animation:cbounce .9s ease-in-out infinite}
+  #ctag::after{content:"";position:absolute;left:18px;bottom:-6px;border:6px solid transparent;border-top-color:#ff8c00;border-bottom:0}
+  @keyframes cbounce{50%{transform:translateY(-5px)}}
   #ccard{position:fixed;width:350px;max-width:calc(100vw - 24px);background:#fff;border:2px solid #e0902a;border-radius:12px;
     padding:12px 14px;pointer-events:auto;box-shadow:0 10px 34px rgba(0,0,0,.28);max-height:calc(100vh - 24px);overflow:auto}
   #ccard.shake{animation:cshake .3s}
@@ -293,7 +298,7 @@
 <body>
 <header>
   <div>
-    <h1>関連図ワークベンチ</h1>
+    <h1>関連図</h1>
     <div class="sub">情報を置き、つながりを判断し、全体像から看護課題を導く</div>
   </div>
   <div class="phase">
@@ -436,6 +441,7 @@
 <div id="coach" role="dialog" aria-label="使い方チュートリアル">
   <div class="cb" id="cbT"></div><div class="cb" id="cbB"></div><div class="cb" id="cbL"></div><div class="cb" id="cbR"></div>
   <div id="cring"></div>
+  <div id="ctag"></div>
   <div id="ccard"></div>
 </div>
 <div id="suppModal"><div class="sm-box">
@@ -489,8 +495,8 @@ const CY_STYLE=[
     { selector:'node.needcare', style:{'border-color':'#9a3b34','border-width':3}},
     { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
     { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
-    { selector:'node.hl', style:{'underlay-color':'#e0902a','underlay-opacity':.35,'underlay-padding':8,'border-color':'#e0902a'}},
-    { selector:'node.hl.hlb', style:{'underlay-opacity':.12,'underlay-padding':16}},
+    { selector:'node.hl', style:{'underlay-color':'#e8a33d','underlay-opacity':.4,'underlay-padding':8,'underlay-shape':'round-rectangle','border-color':'#e8a33d','border-width':3}},
+    { selector:'node.hl.hlb', style:{'underlay-opacity':.25,'underlay-padding':12}},
     { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
     /* 直交ルーティング・ラベルなし。始点はJSで分散。 */
     { selector:'edge', style:{
@@ -649,6 +655,7 @@ document.getElementById('careSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   document.querySelectorAll('#careSeg button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); careKind=b.dataset.c; document.getElementById('careText').focus();
+  coachEvent('care_kind',{kind:careKind});
 });
 
 /* ---- ノード追加 ---- */
@@ -1359,83 +1366,87 @@ window.addEventListener('load',()=>{ document.getElementById('nodeText').focus()
 const COACH={active:false,idx:0,done:false,ids:{},snap:null,pulse:null,phase:'input',completed:false};
 const cq=sel=>document.querySelector(sel);
 /* 完成図の配置（モデル座標）。置いた順に画面が動かないよう、完成形が収まる倍率に固定する */
-const COACH_POS={ p:{x:60,y:20}, e2:{x:60,y:200}, e1:{x:330,y:200}, s:{x:600,y:200}, d:{x:870,y:200}, c1:{x:330,y:360} };
+const COACH_POS={ p:{x:60,y:20}, e2:{x:60,y:200}, e1:{x:330,y:200}, s:{x:600,y:200}, d:{x:870,y:200}, c1:{x:330,y:370}, c2:{x:600,y:370} };
 const COACH_BOX={x1:-60,y1:-30,x2:980,y2:410};
 
-function cSetPatient(){ pName.value='航空 太郎'; pAge.value='90'; pDisease.value='慢性心不全'; }
-function cSetInfo(name,subj,obj){ nodeText.value=name; subjText.value=subj||''; objText.value=obj||''; }
-function cSetCare(t){ careText.value=t; }
 function cClearForms(){ [pName,pAge,pDisease,nodeText,subjText,objText,careText].forEach(x=>x.value=''); }
+function cResetCareKind(){ careKind='OP'; document.querySelectorAll('#careSeg button').forEach(x=>x.classList.toggle('on',x.dataset.c==='OP')); }
 const cCanvasRect=()=>{ const r=cq('#cy').getBoundingClientRect(), t=cq('#stageTop').getBoundingClientRect();
   return {left:r.left,top:Math.max(r.top,t.bottom+4),right:r.right,bottom:r.bottom,width:r.width,height:r.bottom-Math.max(r.top,t.bottom+4)}; };
 const nm=key=>{ const id=COACH.ids[key]; const n=id&&cy.getElementById(id); return n&&!n.empty()?n.data('base'):''; };
 
 const COACH_STEPS=[
  {kind:'read', title:'いっしょに1枚描いてみましょう',
-  body:'この画面のまま、模擬患者さんの関連図を1枚描きます。<b>光っている所だけ</b>が押せます。<br><br><b>症例</b>：航空 太郎さん（90歳）。慢性心不全で入院中。心臓のはたらきが弱く、両下肢にむくみがあります。「足の裏が鈍くて、床を踏んでいる感じがしない」と話し、夜間はトイレまで歩いて行きます。<br><br>いまの図は一時的に退避され、終わると元に戻ります。いつでも「スキップ」できます。'},
- {kind:'click', type:'info', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
+  body:'この画面のまま、模擬患者さんの関連図を1枚描きます。<b>光っている所だけ</b>が押せます。入力は、例を見ながら<b>自分で</b>打ち込みます。<br><br><b>症例</b>：航空 太郎さん（90歳）。慢性心不全で入院中。心臓のはたらきが弱く、両下肢にむくみがあります。「足の裏が鈍くて、床を踏んでいる感じがしない」と話し、夜間はトイレまで歩いて行きます。<br><br>いまの図は一時的に退避され、終わると元に戻ります。いつでも「スキップ」できます。'},
+ {kind:'click', type:'info', tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
   body:'置くものは4種類です。患者情報、情報（症状・原因など）、看護診断、看護ケア。まず<b>「情報」</b>を選んでみましょう。',
   act:'光っている「情報（症状・原因など）」を押します。',
   res:'入力欄が出ました。情報には、<b>名前</b>のほかに、根拠として<b>主観データ</b>（患者が語ったこと）と<b>客観データ</b>（測った・見た事実）を添えられます。'},
- {kind:'try_add', target:()=>[cq('#singleInput'),cq('#addNode')], enter:()=>cSetInfo('足底の感覚低下','足の裏が鈍くて、床を踏んでいる感じがしない',''),
+ {kind:'try_add', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
   title:'そのまま置いてみる（わざと）',
-  body:'入力欄に例が入っています。<b>患者情報がない状態</b>で、そのまま置くとどうなるか、試してみましょう。',
-  act:'「＋ 図に置く」を押します。',
+  body:'「情報の名前」に<b>足底の感覚低下</b>と入力してください。そして、<b>患者情報がない状態</b>で置くとどうなるか、試してみましょう。',
+  act:'入力したら「＋ 図に置く」を押します。',
   res:'エラーになりました。関連図は<b>患者を起点</b>に描きます。まず患者情報から置きましょう。'},
- {kind:'click', type:'patient', enter:()=>cClearForms(), target:()=>[cq('#typeSeg [data-t="patient"]')], title:'「患者情報」を選ぶ',
+ {kind:'click', type:'patient', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="patient"]')], title:'「患者情報」を選ぶ',
   body:'最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
- {kind:'add', nodeType:'patient', key:'p', enter:cSetPatient, target:()=>[cq('#patientInput'),cq('#addNode')], title:'患者情報を入れる',
-  body:'氏名・年齢・病名を入れます。<b>例が入っている</b>ので、そのまま置きましょう（書き換えてもOK）。',
-  act:'「＋ 図に置く」を押します。', res:'患者情報が置けました。'},
- {kind:'read', target:()=>[cq('#typeSeg')], title:'患者情報は1人に1つ',
-  body:'「患者情報」のボタンが<b>入力済み</b>になり、もう選べなくなりました。患者情報は1つだけです（消すと、また置けます）。「情報」が自動で選ばれています。'},
- {kind:'click', type:'diagnosis', target:()=>[cq('#typeSeg [data-t="diagnosis"]')], title:'「看護診断」を選ぶ',
+ {kind:'add', nodeType:'patient', key:'p', tag:'ここに入力して押す', target:()=>[cq('#patientInput'),cq('#addNode')], title:'患者情報を入れる',
+  body:'「氏名」に<b>航空 太郎</b>、「年齢」に<b>90</b>、「病名」に<b>慢性心不全</b>と入力してください。',
+  act:'入力したら「＋ 図に置く」を押します。',
+  res:'図の左上に<b>【患者情報】</b>の枠が表示されました。患者情報は<b>1人に1つ</b>なので、ボタンは「入力済み」になり、もう選べません。'},
+ {kind:'click', type:'diagnosis', tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="diagnosis"]')], title:'「看護診断」を選ぶ',
   body:'今回は流れをつかむため、先にゴールの<b>看護診断（P）</b>を置きます。', act:'光っている「看護診断」を押します。', res:'看護診断の入力欄が出ました。'},
- {kind:'add', nodeType:'diagnosis', key:'d', enter:()=>{ nodeText.value='転倒転落リスク状態'; }, target:()=>[cq('#singleInput'),cq('#addNode')], title:'看護診断を置く',
-  body:'看護診断は、集まった情報から導いた「結論」です。二重の枠で表示されます。',
-  act:'「＋ 図に置く」を押します。', res:'看護診断が置けました。ここから、その根拠をさかのぼります。'},
- {kind:'click', type:'info', enter:()=>cClearForms(), target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
+ {kind:'add', nodeType:'diagnosis', key:'d', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')], title:'看護診断を置く',
+  body:'入力欄に<b>転倒転落リスク状態</b>と入力してください。',
+  act:'入力したら「＋ 図に置く」を押します。', res:'図の右側に、<b>二重の枠</b>で看護診断が表示されました。看護診断は、集まった情報から導いた「結論」です。ここから、その根拠をさかのぼります。'},
+ {kind:'click', type:'info', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
   body:'診断の根拠になる情報を置きます。', act:'光っている「情報」を押します。', res:'情報の入力欄に戻りました。'},
- {kind:'add', nodeType:'info', key:'s', enter:()=>cSetInfo('足底の感覚低下','足の裏が鈍くて、床を踏んでいる感じがしない',''), target:()=>[cq('#singleInput'),cq('#addNode')],
+ {kind:'add', nodeType:'info', key:'s', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
   title:'S：診断の直接の根拠を置く',
-  body:'「転倒しそうだ」と考える<b>直接の根拠</b>がS（症状・徴候）です。名前は「何が起きているか」を短く。その根拠として、ここでは患者の言葉を<b>主観データ</b>に入れています。測定値などは<b>客観データ</b>に入れます。',
-  act:'「＋ 図に置く」を押します。', res:'情報が置けました。ノードの中に、名前と主観データが入っています。'},
- {kind:'link', from:'s', to:'d', title:'S ➔ P をつなぐ',
+  body:'「転倒しそうだ」と考える<b>直接の根拠</b>がS（症状・徴候）です。<br>「情報の名前」に<b>足底の感覚低下</b>、「主観」に患者の言葉<b>足の裏が鈍くて、床を踏んでいる感じがしない</b>と入力してください。「客観」は空欄のままでOKです。',
+  act:'入力したら「＋ 図に置く」を押します。', res:'図に情報が表示されました。1行目が<b>名前</b>、その下に<b>「主観：…」</b>の行が入っています。'},
+ {kind:'link', from:'s', to:'d', tag:'', title:'S ➔ P をつなぐ',
   body:'<b>看護診断に直接入る情報がS</b>です。ノードを<b>2つ続けてクリック</b>すると、1つ目から2つ目へ線が引かれます。',
-  act:()=>`①「${nm('s')}」→②「${nm('d')}」の順にクリックします。`, res:'線が引かれ、ノードの頭に<b>「S:」</b>の印がつきました。「Pに直接入る情報＝S」と自動で判定されます。'},
+  act:()=>`光っている①「${nm('s')}」→②「${nm('d')}」の順にクリックします。`, res:'線が引かれ、ノードの頭に<b>「S:」</b>の印がつきました。「Pに直接入る情報＝S」と自動で判定されます。'},
  {kind:'try_link', from:'d', to:'s', title:'わざと逆向きにつなぐ',
   body:'看護診断は結論なので、<b>診断から矢印を出すことはできません</b>。作法を体験するために、わざと逆向きに引いてみます。',
-  act:()=>`①「${nm('d')}」→②「${nm('s')}」の順にクリックします。`, res:'【関連図の作法】が教えてくれました。矢印は必ず<b>「情報 ➔ 診断」</b>の向きです。'},
- {kind:'add', nodeType:'info', key:'e1', enter:()=>cSetInfo('両下肢の浮腫','','両下腿に圧痕（＋）。体重が3日間で2kg増加'), target:()=>[cq('#singleInput'),cq('#addNode')],
+  act:()=>`光っている①「${nm('d')}」→②「${nm('s')}」の順にクリックします。`, res:'【関連図の作法】が教えてくれました。矢印は必ず<b>「情報 ➔ 診断」</b>の向きです。'},
+ {kind:'add', nodeType:'info', key:'e1', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
   title:'E1：Sの原因を置く',
-  body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」を考えます。両下肢の浮腫が原因です。Sにつながる原因が<b>E（原因・関連因子）</b>です。今度は<b>客観データ</b>だけを添えています（どちらか片方でもOK）。',
-  act:'「＋ 図に置く」を押します。', res:'置けました。'},
+  body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」を考えます。両下肢の浮腫が原因です。Sにつながる原因が<b>E（原因・関連因子）</b>です。<br>「情報の名前」に<b>両下肢の浮腫</b>、「客観」に<b>両下腿に圧痕あり。体重が3日間で2kg増加</b>と入力してください。今度は「主観」が空欄です（どちらか片方でもOK）。',
+  act:'入力したら「＋ 図に置く」を押します。', res:'図に表示されました。今度は<b>「客観：…」</b>の行が入っています。'},
  {kind:'link', from:'e1', to:'s', title:'E ➔ S をつなぐ',
   body:'原因から症状へ、<b>原因 ➔ 結果</b>の向きで引きます。',
-  act:()=>`①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'Sの手前の原因は<b>「E1」</b>です。矢印にも（E1：原因・関連因子）と自動表示されました。'},
- {kind:'add', nodeType:'info', key:'e2', enter:()=>cSetInfo('心機能の低下','少し歩くだけで息が切れる','心エコーで駆出率35%'), target:()=>[cq('#singleInput'),cq('#addNode')],
+  act:()=>`光っている①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'Sの手前の原因は<b>「E1」</b>です。矢印にも（E1：原因・関連因子）と自動表示されました。'},
+ {kind:'add', nodeType:'info', key:'e2', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
   title:'さらに原因をさかのぼる',
-  body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能の低下です。原因の原因は<b>E2</b>。「心不全 ➔ 転倒」と一足飛びにせず、間の変化を一歩ずつ置きます。Eを細かく分解するほど、看護ケアも具体的にできます。',
-  act:'「＋ 図に置く」を押します。', res:'置けました。主観データと客観データの両方を添えています。'},
+  body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能の低下です。原因の原因は<b>E2</b>。「心不全 ➔ 転倒」と一足飛びにせず、間の変化を一歩ずつ置きます。<br>「情報の名前」に<b>心機能の低下</b>、「主観」に<b>少し歩くだけで息が切れる</b>、「客観」に<b>心エコーで駆出率35%</b>と入力してください。',
+  act:'入力したら「＋ 図に置く」を押します。', res:'主観と客観の<b>両方</b>の行が入りました。Eを細かく分解するほど、看護ケアも具体的にできます。'},
  {kind:'link', from:'e2', to:'e1', title:'E2 ➔ E1 をつなぐ',
   body:'同じく、原因 ➔ 結果の向きです。',
-  act:()=>`①「${nm('e2')}」→②「${nm('e1')}」の順にクリックします。`, res:'連鎖が <b>E2 ➔ E1 ➔ S ➔ P</b> になりました。さかのぼるほどEの数字が増えます。'},
+  act:()=>`光っている①「${nm('e2')}」→②「${nm('e1')}」の順にクリックします。`, res:'連鎖が <b>E2 ➔ E1 ➔ S ➔ P</b> になりました。さかのぼるほどEの数字が増えます。'},
  {kind:'link', from:'p', to:'e2', title:'患者から始める',
   body:'いちばん上流の原因は、患者の病気・背景に由来します。起点の患者情報から線を引きます。',
-  act:()=>`①「患者情報」→②「${nm('e2')}」の順にクリックします。`, res:'患者から結論まで、1本の道がつながりました。'},
- {kind:'click', type:'care', enter:()=>cClearForms(), target:()=>[cq('#typeSeg [data-t="care"]')], title:'「看護ケア」を選ぶ',
+  act:()=>`光っている①「患者情報」→②「${nm('e2')}」の順にクリックします。`, res:'患者から結論まで、1本の道がつながりました。'},
+ {kind:'click', type:'care', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="care"]')], title:'「看護ケア」を選ぶ',
   body:'<b>Eに対して介入を考える</b>のが看護ケアの考え方です。Eを分解したら、「これは看護で予防や対策ができるものかな？」と一つ一つ考えましょう。', act:'光っている「看護ケア」を押します。',
-  res:'OP（観察）・TP（ケア）・EP（教育）から選べます。'},
- {kind:'add', nodeType:'care', key:'c1', enter:()=>cSetCare('浮腫の程度と体重を毎日観察する'), target:()=>[cq('#careInput'),cq('#addNode')], title:'看護ケアを置く',
-  body:'「両下肢の浮腫」は、看護で観察や対策ができます。まず<b>OP（観察計画）</b>を置きます（TP・EPも選べます）。',
-  act:'「＋ 図に置く」を押します。', res:'看護ケアが置けました。置いただけでは、まだ何にもつながっていません。'},
+  res:'OP（観察計画）・TP（ケア計画）・EP（教育計画）から選べます。いまは<b>OP</b>が選ばれています。'},
+ {kind:'add', nodeType:'care', key:'c1', tag:'ここに入力して押す', target:()=>[cq('#careInput'),cq('#addNode')], title:'看護ケアを置く（OP）',
+  body:'「両下肢の浮腫」は、看護で観察や対策ができます。まず<b>OP（観察計画）</b>のまま、入力欄に<b>浮腫の程度と体重を毎日観察する</b>と入力してください。',
+  act:'入力したら「＋ 図に置く」を押します。', res:'<b>「OP: …」</b>の看護ケアが表示されました。置いただけでは、まだ何にもつながっていません。'},
  {kind:'link', from:'c1', to:'e1', title:'看護ケア ➔ 原因 をつなぐ（二重線）',
   body:'看護計画は<b>原因に対して</b>立てます。矢印は<b>看護ケアから、働きかけるE</b>へ、二重線で引きます（原因からケアへ引くのではありません）。',
-  act:()=>`①「看護ケア」→②「${nm('e1')}」の順にクリックします。`, res:'二重線の矢印でつながりました。'},
- {kind:'read', target:()=>[cq('.panel.right')], title:'右のパネルで点検する',
-  body:'右では、<b>PESの作法の達成度</b>、看護計画の過不足、診断ごとの連鎖が自動で確認できます。いま描いた図は、すべて満たしているはずです。'},
- {kind:'end', title:'完成！ 関連図ができました',
-  body:'<b>心機能の低下（E2）➔ 両下肢の浮腫（E1）➔ 足底の感覚低下（S）➔ 転倒転落リスク状態（P）</b>。そして、Eに対する看護ケア。<br><br>実践画面では、このほかに<b>右クリック</b>（線の削除・実線⇄点線、ノードへの<b>主観・客観データの追加</b>）、<b>💾保存</b>、<b>🔎ふりかえる</b>、<b>印刷/PDF</b>が使えます。「実践画面へ」を押すと、元の図に戻ります。'}
+  act:()=>`光っている①「${nm('c1')}」→②「${nm('e1')}」の順にクリックします。`, res:'二重線の矢印でつながりました。'},
+ {kind:'click', careKind:'TP', tag:'ここを押す', target:()=>[cq('#careSeg [data-c="TP"]')], title:'同じEに、もう1つ看護ケア（TP）',
+  body:'<b>ひとつのEには、看護ケアをいくつでもつなげられます。</b>観察（OP）に加えて、浮腫に直接働きかけるケア（<b>TP</b>）も考えてみましょう。',
+  act:'光っている「TP ケア計画」を押します。', res:'TPが選ばれました。'},
+ {kind:'add', nodeType:'care', key:'c2', tag:'ここに入力して押す', target:()=>[cq('#careInput'),cq('#addNode')], title:'看護ケアを置く（TP）',
+  body:'入力欄に<b>安静時は下肢を挙上する</b>と入力してください。',
+  act:'入力したら「＋ 図に置く」を押します。', res:'<b>「TP: …」</b>の看護ケアが表示されました。'},
+ {kind:'link', from:'c2', to:'e1', title:'もう1本、看護ケア ➔ 原因',
+  body:'こちらも、看護ケアから、働きかけるEへ引きます。',
+  act:()=>`光っている①「${nm('c2')}」→②「${nm('e1')}」の順にクリックします。`, res:'ひとつのE（両下肢の浮腫）に、<b>OPとTPの2つ</b>の看護ケアがつながりました。EP（教育計画）も同じように加えられます。'},
+ {kind:'end', title:'さあ、次はあなたの番です',
+  body:'いま描いたのは、関連図の<b>「型」</b>をなぞった小さな図です。実際の患者さんには、もっと多くの情報があり、つながりも1本ではありません。<br><br>自分の受け持ち事例で、<b>患者情報から置き</b>、「<b>なぜ？</b>」とさかのぼってEを見つけ、<b>看護で予防や対策ができるE</b>にケアを考えてみましょう。どこまで描けるか、試してみてください。<br><br>描きながら、ときどき<b>右のパネル</b>（達成度・看護計画の点検）を見て、足りないところを探しましょう。<b>右クリック</b>（線の削除・実線⇄点線、主観・客観データの追加）、<b>💾保存</b>、<b>🔎ふりかえる</b>も使えます。'}
 ];
 
 function coachFitView(){
@@ -1458,17 +1469,17 @@ function coachStart(){
   document.body.classList.add('coaching');
   tutActive=true; COACH.active=true; COACH.idx=0; COACH.done=false; COACH.ids={}; COACH.completed=false;
   cy.elements().remove(); diagnosisOrder=[]; nodeSeq=0; linkSource=null;
-  cClearForms(); selectType('patient'); refresh(); setPhase('input');
+  cClearForms(); cResetCareKind(); selectType('patient'); refresh(); setPhase('input');
   cy.userPanningEnabled(false); cy.userZoomingEnabled(false); cy.autoungrabify(true);
   coachFitView();
   cq('#coach').classList.add('on');
-  COACH.pulse=setInterval(()=>cy.nodes('.hl').toggleClass('hlb'),550);
+  COACH.pulse=setInterval(()=>cy.nodes('.hl').toggleClass('hlb'),1200);
   coachEnter();
 }
 function coachEnd(reason){
   if(!COACH.active) return;
   clearInterval(COACH.pulse); COACH.pulse=null;
-  cq('#coach').classList.remove('on');
+  cq('#coach').classList.remove('on'); cq('#ctag').style.display='none';
   document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click());
   const step=COACH.idx+1, completed=COACH.completed;
   document.body.classList.remove('coaching');
@@ -1476,7 +1487,7 @@ function coachEnd(reason){
   cy.userPanningEnabled(true); cy.userZoomingEnabled(true); cy.autoungrabify(false);
   cy.nodes().removeClass('hl hlb');
   applyData(COACH.snap);                      // 退避しておいた図を元に戻す
-  cClearForms(); selectType(cy.nodes('[ntype="patient"]').length?'info':'patient');
+  cClearForms(); cResetCareKind(); selectType(cy.nodes('[ntype="patient"]').length?'info':'patient');
   setPhase(COACH.phase);
   interactionLog.push(completed?{t:Date.now(),action:'tutorial_complete'}:{t:Date.now(),action:'tutorial_exit',step,total:COACH_STEPS.length,reason:reason||'skip'});
   COACH.snap=null; scheduleAutosave();
@@ -1488,6 +1499,7 @@ function coachEnter(){
   cy.elements().unselect(); linkSource=null;
   if(st.enter) st.enter();
   if(st.kind==='end'){ COACH.completed=true; }
+  if(COACH.idx===0) COACH.prevRes='';
   coachRender();
 }
 function coachDone(){ COACH.done=true; coachRender(); }
@@ -1497,14 +1509,18 @@ function coachEvent(name,d){
   if(!COACH.active||COACH.done) return;
   const st=COACH_STEPS[COACH.idx]; let ok=false;
   switch(st.kind){
-    case 'click': ok=(name==='type_selected'&&d.type===st.type); break;
+    case 'click': ok= st.careKind ? (name==='care_kind'&&d.kind===st.careKind) : (name==='type_selected'&&d.type===st.type); break;
     case 'add': if(name==='node_added'&&d.type===st.nodeType){
         COACH.ids[st.key]=d.id; cy.getElementById(d.id).position({...COACH_POS[st.key]}); spreadEndpoints(); ok=true; } break;
     case 'try_add': ok=(name==='add_blocked'); break;
     case 'link': ok=(name==='edge_added'&&d.source===COACH.ids[st.from]&&d.target===COACH.ids[st.to]); break;
     case 'try_link': ok=(name==='edge_blocked'&&d.source===COACH.ids[st.from]&&d.target===COACH.ids[st.to]); break;
   }
-  if(ok){ COACH.done=true; coachRender(); }
+  if(ok){
+    COACH.done=true; coachRender();
+    const at=COACH.idx;
+    setTimeout(()=>{ if(COACH.active&&COACH.idx===at){ if(!st.kind.startsWith('try')) document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click()); COACH.prevRes=st.res||''; COACH.idx++; coachEnter(); } }, st.kind.startsWith('try')?1400:900);
+  }
 }
 /* 「図に置く」を押してよい場面か */
 function coachAllowAdd(type){
@@ -1512,7 +1528,11 @@ function coachAllowAdd(type){
   const st=COACH_STEPS[COACH.idx];
   if(COACH.done) return false;
   if(st.kind==='try_add') return true;
-  if(st.kind==='add' && type===st.nodeType) return true;
+  if(st.kind==='add' && type===st.nodeType){
+    const empty = type==='patient' ? ![pName,pAge,pDisease].some(x=>x.value.trim()) : type==='care' ? !careText.value.trim() : !nodeText.value.trim();
+    if(empty){ coachNudge('入力欄に入力してから「＋ 図に置く」を押しましょう。'); return false; }
+    return true;
+  }
   coachNudge('いまは光っている操作だけ押せます。'); return false;
 }
 /* 図のノードをクリックしてよい場面か（つなぐ操作のとき、光っている2つだけ・順番どおり） */
@@ -1540,18 +1560,19 @@ function coachRender(){
   const canNext = st.kind==='read'||COACH.done;
   cq('#ccard').innerHTML=`
     <div class="cstp"><span>STEP ${COACH.idx+1}</span><span class="cprog"><i style="width:${Math.round(COACH.idx/(N-1)*100)}%"></i></span><span>${COACH.idx+1} / ${N}</span></div>
+    ${(!COACH.done&&COACH.prevRes)?`<div class="cres" style="margin:4px 0 6px">✓ ${COACH.prevRes}</div>`:''}
     <div class="ctt">${st.title}</div>
     <div class="cbd">${st.body}</div>
     ${(!last&&!COACH.done&&act)?`<div class="cact">▶ ${act}</div>`:''}
     ${(COACH.done&&st.res)?`<div class="cres">✓ ${st.res}</div>`:''}
     <div class="cnudge"></div>
     <div class="cbtns">
-      ${last?`<button class="cnext pulse" id="cGo">実践画面へ</button><button class="csec" id="cAgain">もう一度</button>`
-            :`<button class="cnext ${canNext?'pulse':''}" id="cNext" ${canNext?'':'disabled'}>${st.kind==='read'&&COACH.idx===0?'はじめる ▶':'次へ ▶'}</button>`}
+      ${last?`<button class="cnext" id="cGo">自分でやってみる ▶</button><button class="csec" id="cAgain">もう一度見る</button>`
+            :(st.kind==='read'?`<button class="cnext" id="cNext">${COACH.idx===0?'はじめる ▶':'次へ ▶'}</button>`:'')}
       <button class="cskip" id="cSkip">${last?'':'スキップ（Esc）'}</button>
     </div>`;
   if(last){ cq('#cGo').onclick=()=>coachEnd('complete'); cq('#cAgain').onclick=()=>{ coachEnd('restart'); coachStart(); }; }
-  else{ cq('#cNext').onclick=()=>{ if(!canNext) return; document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click()); COACH.idx++; coachEnter(); }; }
+  else if(cq('#cNext')){ cq('#cNext').onclick=()=>{ COACH.prevRes=''; COACH.idx++; coachEnter(); }; }
   cq('#cSkip').onclick=()=>coachEnd('skip');
   coachLayout();
 }
@@ -1577,6 +1598,9 @@ function coachLayout(){
     const ring=cq('#cring'); ring.style.display=isLink?'none':'block';
     ring.style.left=(hole.left)+'px'; ring.style.top=hole.top+'px'; ring.style.width=(hole.right-hole.left)+'px'; ring.style.height=(hole.bottom-hole.top)+'px';
   }
+  const tg=cq('#ctag');
+  if(false){ tg.textContent='👇 '+st.tag; tg.style.display='block'; tg.style.left=(hole.left+4)+'px'; tg.style.top=Math.max(4,hole.top-tg.offsetHeight-12)+'px'; }
+  else tg.style.display='none';
   // 手順カードは、いつも図の左下（描く場所を隠さない固定位置）。穴なしのときは中央
   const card=cq('#ccard'), cw=card.offsetWidth, ch=card.offsetHeight, cr=cq('#cy').getBoundingClientRect();
   if(!hole && COACH.idx===0){ card.style.left=Math.max(12,(W-cw)/2)+'px'; card.style.top=Math.max(12,(H-ch)/2)+'px'; }
