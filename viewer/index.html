@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>関連図ログビューア</title>
+<style>
+  :root{
+    --paper:#f7f5ef; --panel:#fbfaf6; --card:#ffffff; --ink:#23201b; --ink-soft:#6b6459;
+    --rule:#d8d2c4; --rule-soft:#e7e2d6;
+    --patient:#3d4a70; --info:#2f7d8c; --speech:#2f6f9f; --data:#3f8a5c; --diag:#3a362f; --care:#7b5aa6;
+    --edge:#5a5449; --warn:#9a3b34; --warn-bg:#f6e6e3; --fix:#8a8172; --accent:#c15a2e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;font-size:14px;line-height:1.6}
+  header{padding:18px 24px 12px;border-bottom:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline}
+  h1{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:20px;margin:0;letter-spacing:.04em}
+  .sub{color:var(--ink-soft);font-size:12px}
+  main{padding:16px 24px 48px;max-width:1400px;margin:0 auto}
+  button{font:inherit;font-size:13px;padding:6px 14px;border:1px solid var(--rule);background:var(--card);color:var(--ink);border-radius:6px;cursor:pointer}
+  button:hover{border-color:var(--ink-soft)}
+  button.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  button:disabled{opacity:.4;cursor:default}
+  #drop{border:2px dashed var(--rule);border-radius:10px;padding:22px;text-align:center;background:var(--panel);transition:.12s}
+  #drop.over{border-color:var(--info);background:#eef5f6}
+  #drop .big{font-size:15px;font-weight:600}
+  #drop .small{color:var(--ink-soft);font-size:12px;margin-top:4px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 8px}
+  .bar .sp{flex:1}
+  #msgs{font-size:12px;color:var(--warn)}
+  h2{font-size:13px;letter-spacing:.08em;color:var(--ink-soft);margin:26px 0 8px;border-bottom:1px solid var(--rule);padding-bottom:4px;font-weight:600}
+  .tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:8px;background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{padding:6px 9px;border-bottom:1px solid var(--rule-soft);text-align:right;white-space:nowrap}
+  th{background:var(--panel);font-weight:600;color:var(--ink-soft);position:sticky;top:0;cursor:pointer;user-select:none;font-size:11.5px}
+  th:hover{color:var(--ink)}
+  th.sorted::after{content:" ▾"} th.sorted.asc::after{content:" ▴"}
+  td:first-child,th:first-child{text-align:left}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f3f1ea}
+  tbody tr.on{background:#e9edf7}
+  td.warn{color:var(--warn);font-weight:600}
+  td.zero{color:#b9b2a5}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:900px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:14px 16px}
+  .card h3{margin:0 0 10px;font-size:13px}
+  .hbar{display:grid;grid-template-columns:230px 1fr 48px;gap:8px;align-items:center;font-size:12.5px;margin:5px 0}
+  .hbar .track{height:14px;background:var(--rule-soft);border-radius:3px;overflow:hidden}
+  .hbar .fill{height:100%;background:var(--warn);border-radius:3px}
+  .hbar .n{text-align:right;font-variant-numeric:tabular-nums}
+  .muted{color:var(--ink-soft);font-size:12px}
+  #detail{display:none}
+  .dhead{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;margin-bottom:10px}
+  .dhead .nm{font-size:17px;font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--rule)}
+  .chip b{font-variant-numeric:tabular-nums}
+  #tl{width:100%;height:96px;display:block}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--ink-soft);margin-top:4px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  #mini{width:100%;height:420px;display:block;background:var(--panel);border-radius:6px}
+  .evwrap{max-height:460px;overflow:auto;border:1px solid var(--rule);border-radius:8px;background:var(--card)}
+  .evwrap td{text-align:left;white-space:normal}
+  .evwrap td.t{font-variant-numeric:tabular-nums;color:var(--ink-soft);white-space:nowrap}
+  .tag{display:inline-block;font-size:11px;padding:0 7px;border-radius:3px;color:#fff;margin-right:6px;white-space:nowrap}
+  tr.sess td{background:#f1eee5;color:var(--ink-soft);font-size:11.5px;text-align:center}
+  details.defs{margin-top:28px;font-size:12.5px;color:var(--ink-soft)}
+  details.defs summary{cursor:pointer;color:var(--ink)}
+  details.defs dl{display:grid;grid-template-columns:200px 1fr;gap:4px 14px;margin:10px 0}
+  details.defs dt{color:var(--ink);font-weight:600}
+  details.defs dd{margin:0}
+  .empty{padding:30px;text-align:center;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+<header>
+  <h1>関連図ログビューア</h1>
+  <span class="sub">学生が「💾 保存」で書き出したJSONを読み込み、作図の過程を一覧・比較します。ファイルはこのブラウザの中だけで処理され、どこにも送信されません。</span>
+</header>
+<main>
+  <div id="drop">
+    <div class="big">保存ファイル（.json）をここにまとめてドラッグ</div>
+    <div class="small">または <button id="pick" type="button">ファイルを選ぶ</button>　複数可・追加で読み込めます。ファイル名が学生名として表示されます（例：学籍番号.json）。</div>
+    <input type="file" id="file" accept=".json,application/json" multiple hidden>
+  </div>
+  <div class="bar">
+    <span id="count" class="muted">まだ読み込まれていません</span>
+    <span id="msgs"></span>
+    <span class="sp"></span>
+    <button id="csvSum" disabled>一覧をCSVで保存</button>
+    <button id="csvEv" disabled>全操作をCSVで保存（縦長）</button>
+    <button id="clear" disabled>すべて消去</button>
+  </div>
+
+  <h2>学生ごとの一覧（行をクリックで詳細）</h2>
+  <div class="tablewrap"><table id="sum"><thead></thead><tbody><tr><td class="empty" colspan="20">ファイルを読み込むと表示されます</td></tr></tbody></table></div>
+
+  <div class="grid2" id="classWrap" style="display:none">
+    <div>
+      <h2>クラス全体：作法の通知（つまずき）の内訳</h2>
+      <div class="card" id="stumbleCard"></div>
+    </div>
+    <div>
+      <h2>クラス全体：因果連鎖の深さ（最終図で最も深い E）</h2>
+      <div class="card" id="depthCard"></div>
+    </div>
+  </div>
+
+  <section id="detail">
+    <h2>詳細</h2>
+    <div class="dhead"><span class="nm" id="dName"></span><span class="muted" id="dMeta"></span></div>
+    <div class="chips" id="dChips"></div>
+    <h2>操作の流れ（作業時間の軸。点線＝中断して再開した所）</h2>
+    <div class="card">
+      <svg id="tl" preserveAspectRatio="none"></svg>
+      <div class="legend" id="tlLegend"></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <h2>最終の図（配置のみの簡易表示）</h2>
+        <div class="card" style="padding:8px"><svg id="mini"></svg></div>
+      </div>
+      <div>
+        <h2>操作の記録</h2>
+        <div class="evwrap"><table id="ev"><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <details class="defs">
+    <summary>指標の定義</summary>
+    <dl>
+      <dt>作業時間</dt><dd>操作どうしの間隔の合計。ただし「開く」「続きから再開」の直前の空白（翌日まで閉じていた時間など）は含めない（ツールの「ふりかえる」と同じ定義）。</dd>
+      <dt>セッション数</dt><dd>1＋「開く」「続きから再開」の回数。</dd>
+      <dt>先に置いた割合</dt><dd>最初の線を引く前に置いた情報の数 ÷ 置いた情報の総数。高いほど「集めてからつなぐ」進め方。</dd>
+      <dt>最初の診断の位置</dt><dd>置いた情報の中で、最初の看護診断が何番目だったか（0%＝最初、100%＝最後）。低いほど早く診断を置いている。</dd>
+      <dt>作法の通知</dt><dd>PESの作法に反する操作をツールが止めた回数（矢印の向き・患者情報より先の配置など）。</dd>
+      <dt>修正</dt><dd>削除・実線点線の切替・診断の並べ替えの合計。修正率＝修正 ÷（置いた情報＋引いた線）。</dd>
+      <dt>最深の E</dt><dd>最終の図で、ツールが判定した原因の段数の最大値（E1＝症状の直前の原因のみ、E2以上＝間の変化を挟んでいる）。</dd>
+      <dt>未接続</dt><dd>最終の図で、どの線ともつながっていない情報の数。</dd>
+    </dl>
+    <div>※ このビューアは記録をそのまま数えるだけで、「収集先行型」などの分類や良し悪しの判定はしません。</div>
+  </details>
+</main>
+
+<script>
+/* ============================================================
+   定義
+   ============================================================ */
+const NTYPE={patient:['患者情報','--patient'],info:['情報','--info'],speech:['発話','--speech'],data:['客観データ','--data'],diagnosis:['看護診断','--diag'],care:['看護ケア','--care']};
+const BLOCK={source_is_diagnosis:'看護診断から矢印を出そうとした',target_is_patient:'患者情報へ矢印を入れようとした',
+  target_is_care:'原因 ➔ 看護ケア の向きで結ぼうとした',care_to_non_info:'看護ケアを原因・症状以外へ結ぼうとした',
+  no_patient:'患者情報より先に他の情報を置こうとした'};
+const blockLabel=r=>BLOCK[r]||('作法の通知（'+r+'）');
+// 操作の分類（タイムラインの段と色）
+const CAT={node:{label:'情報を置く',color:'#2f7d8c',row:0},edge:{label:'線を引く',color:'#5a5449',row:1},
+  block:{label:'作法の通知',color:'#9a3b34',row:2},fix:{label:'修正（削除・切替・並べ替え）',color:'#c09a3a',row:3},
+  other:{label:'その他（保存・ふりかえり等）',color:'#a39d91',row:4}};
+function catOf(a){
+  switch(a){ case 'add_node': case 'add_supp': return 'node'; case 'add_edge': return 'edge';
+    case 'blocked_edge': case 'blocked_add': case 'print_blocked_missing_care': return 'block';
+    case 'delete_node': case 'delete_edge': case 'delete_supp': case 'toggle_edge': case 'reorder_diagnosis': return 'fix';
+    default: return 'other'; }
+}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct=v=>v==null?'—':Math.round(v*100)+'%';
+const mmss=ms=>{ const s=Math.round(ms/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+const clock=t=>{ const d=new Date(t); return d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'})+' '+d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
+
+/* ============================================================
+   1ファイルの解析
+   ============================================================ */
+function analyze(name,d){
+  const L=(Array.isArray(d.interactionLog)?d.interactionLog:[]).filter(e=>e&&typeof e.t==='number').slice().sort((a,b)=>a.t-b.t);
+  const nodes=Array.isArray(d.nodes)?d.nodes:[], edges=Array.isArray(d.edges)?d.edges:[];
+  const nodeById={}; nodes.forEach(n=>{ if(n&&n.data) nodeById[n.data.id]=n.data; });
+  // 削除済みノードの種類も、記録から補う
+  const typeById={}; L.forEach(e=>{ if(e.action==='add_node'&&e.id) typeById[e.id]=e.type; });
+  nodes.forEach(n=>{ if(n&&n.data) typeById[n.data.id]=n.data.ntype; });
+
+  // 作業時間（再開・読み込みの直前の空白を除く）とセッション境界
+  let active=0; const at=[]; const breaks=[];
+  L.forEach((e,i)=>{ if(i>0){ if(e.action==='load_json'||e.action==='resume_autosave'){ breaks.push(active); } else active+=e.t-L[i-1].t; } at.push(active); });
+
+  const adds=L.filter(e=>e.action==='add_node'), ed=L.filter(e=>e.action==='add_edge');
+  const firstEdgeT=ed.length?ed[0].t:Infinity;
+  const before=adds.filter(a=>a.t<firstEdgeT).length;
+  const fd=adds.findIndex(a=>a.type==='diagnosis');
+  const blocks=L.filter(e=>e.action==='blocked_edge'||e.action==='blocked_add');
+  const byReason={}; blocks.forEach(b=>{ const r=b.reason||'unknown'; byReason[r]=(byReason[r]||0)+1; });
+  const dels=L.filter(e=>e.action==='delete_node'||e.action==='delete_edge').length;
+  const toggles=L.filter(e=>e.action==='toggle_edge').length;
+  const reorders=L.filter(e=>e.action==='reorder_diagnosis').length;
+  const fixes=dels+toggles+reorders;
+
+  // 最終の図での E の深さ（最後に記録された pes_role のうち、今も残っている線）
+  const edgeIds=new Set(edges.map(e=>e.data&&e.data.id));
+  const lastRole={}; L.forEach(e=>{ if(e.action==='pes_role'&&e.id) lastRole[e.id]=e.pes; });
+  let maxE=0, sCount=0;
+  Object.entries(lastRole).forEach(([id,p])=>{ if(!edgeIds.has(id)) return; if(p==='S') sCount++; else { const m=/^E(\d+)/.exec(p||''); if(m) maxE=Math.max(maxE,+m[1]); } });
+
+  const deg={}; edges.forEach(e=>{ if(!e.data) return; deg[e.data.source]=(deg[e.data.source]||0)+1; deg[e.data.target]=(deg[e.data.target]||0)+1; });
+  const unlinked=nodes.filter(n=>n.data&&!deg[n.data.id]).length;
+  const tut=L.some(e=>e.action==='tutorial_complete')?'完了':L.some(e=>e.action==='tutorial_exit')?'途中':L.some(e=>e.action==='tutorial_start')?'開始のみ':'なし';
+
+  return { name, d, L, at, breaks, nodeById, typeById,
+    m:{ active, sessions:1+breaks.length, adds:adds.length, edgesAdded:ed.length,
+        finalNodes:nodes.length, finalEdges:edges.length,
+        beforeRatio:adds.length&&ed.length?before/adds.length:null,
+        firstDiagPos:fd<0?null:fd/Math.max(1,adds.length-1),
+        blocks:blocks.length, byReason, dels, toggles, reorders, fixes,
+        fixRate:(adds.length+ed.length)?fixes/(adds.length+ed.length):null,
+        maxE, sCount, unlinked,
+        diagnoses:nodes.filter(n=>n.data&&n.data.ntype==='diagnosis').length,
+        cares:nodes.filter(n=>n.data&&n.data.ntype==='care').length,
+        reviews:L.filter(e=>e.action==='open_review').length, tut,
+        start:L.length?L[0].t:null, end:L.length?L[L.length-1].t:null } };
+}
+
+/* ============================================================
+   読み込み
+   ============================================================ */
+const S={list:[],sel:-1,sortKey:'name',asc:true};
+const drop=document.getElementById('drop'), fileIn=document.getElementById('file');
+document.getElementById('pick').onclick=e=>{ e.stopPropagation(); fileIn.click(); };
+drop.addEventListener('click',()=>fileIn.click());
+fileIn.addEventListener('change',()=>{ readFiles(fileIn.files); fileIn.value=''; });
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{ e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{ e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop',e=>readFiles(e.dataTransfer.files));
+// ページのどこに落としても読み込む（誤ってファイルを開いてしまわないように）
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>{ e.preventDefault(); if(!drop.contains(e.target)) readFiles(e.dataTransfer.files); });
+
+async function readFiles(files){
+  const errs=[];
+  for(const f of [...files]){
+    if(!/\.json$/i.test(f.name)){ errs.push(f.name+'：JSONではありません'); continue; }
+    try{
+      const d=JSON.parse(await f.text());
+      if(!d||d.app!=='kanrenzu-workbench'){ errs.push(f.name+'：関連図ツールの保存ファイルではありません'); continue; }
+      const name=f.name.replace(/\.json$/i,'');
+      const i=S.list.findIndex(x=>x.name===name);
+      const a=analyze(name,d);
+      if(i>=0) S.list[i]=a; else S.list.push(a);     // 同じ名前は上書き
+    }catch(e){ errs.push(f.name+'：読み込めませんでした'); }
+  }
+  document.getElementById('msgs').textContent=errs.join('　');
+  render();
+}
+document.getElementById('clear').onclick=()=>{ if(!confirm('読み込んだファイルをすべて消去します。')) return; S.list=[]; S.sel=-1; render(); };
+
+/* ============================================================
+   一覧
+   ============================================================ */
+const COLS=[
+  {k:'name',t:'学生（ファイル名）',v:a=>a.name,f:v=>esc(v)},
+  {k:'active',t:'作業時間',v:a=>a.m.active,f:v=>mmss(v)},
+  {k:'sessions',t:'セッション',v:a=>a.m.sessions},
+  {k:'adds',t:'置いた情報',v:a=>a.m.adds},
+  {k:'edgesAdded',t:'引いた線',v:a=>a.m.edgesAdded},
+  {k:'beforeRatio',t:'先に置いた割合',v:a=>a.m.beforeRatio,f:pct},
+  {k:'firstDiagPos',t:'最初の診断の位置',v:a=>a.m.firstDiagPos,f:pct},
+  {k:'blocks',t:'作法の通知',v:a=>a.m.blocks,warn:v=>v>0},
+  {k:'fixes',t:'修正',v:a=>a.m.fixes},
+  {k:'fixRate',t:'修正率',v:a=>a.m.fixRate,f:pct},
+  {k:'maxE',t:'最深のE',v:a=>a.m.maxE,f:v=>v?'E'+v:'—'},
+  {k:'diagnoses',t:'看護診断',v:a=>a.m.diagnoses},
+  {k:'cares',t:'看護ケア',v:a=>a.m.cares},
+  {k:'unlinked',t:'未接続',v:a=>a.m.unlinked,warn:v=>v>0},
+  {k:'reviews',t:'ふりかえり',v:a=>a.m.reviews},
+  {k:'tut',t:'チュートリアル',v:a=>a.m.tut,f:v=>esc(v)}
+];
+function sortedList(){
+  const c=COLS.find(c=>c.k===S.sortKey)||COLS[0];
+  return S.list.map((a,i)=>({a,i})).sort((p,q)=>{
+    let x=c.v(p.a), y=c.v(q.a);
+    if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1;
+    const r=typeof x==='string'?x.localeCompare(y,'ja',{numeric:true}):x-y;
+    return S.asc?r:-r; });
+}
+function renderTable(){
+  const th=COLS.map(c=>`<th data-k="${c.k}" class="${S.sortKey===c.k?'sorted'+(S.asc?' asc':''):''}">${c.t}</th>`).join('');
+  document.querySelector('#sum thead').innerHTML='<tr>'+th+'</tr>';
+  document.querySelectorAll('#sum th').forEach(h=>h.onclick=()=>{ const k=h.dataset.k; if(S.sortKey===k) S.asc=!S.asc; else { S.sortKey=k; S.asc=k==='name'; } renderTable(); });
+  const tb=document.querySelector('#sum tbody');
+  if(!S.list.length){ tb.innerHTML=`<tr><td class="empty" colspan="${COLS.length}">ファイルを読み込むと表示されます</td></tr>`; return; }
+  tb.innerHTML=sortedList().map(({a,i})=>'<tr data-i="'+i+'" class="'+(i===S.sel?'on':'')+'">'+COLS.map(c=>{
+    const v=c.v(a), cls=[]; if(c.warn&&c.warn(v)) cls.push('warn'); if(v===0) cls.push('zero');
+    return `<td class="${cls.join(' ')}">${c.f?c.f(v):v}</td>`; }).join('')+'</tr>').join('');
+  tb.querySelectorAll('tr[data-i]').forEach(tr=>tr.onclick=()=>{ S.sel=+tr.dataset.i; renderTable(); renderDetail(); document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'start'}); });
+}
+
+/* ============================================================
+   クラス全体
+   ============================================================ */
+function hbars(rows,max,color){
+  return rows.map(([lab,n])=>`<div class="hbar"><span>${esc(lab)}</span><span class="track"><span class="fill" style="display:block;width:${max?n/max*100:0}%;background:${color}"></span></span><span class="n">${n}</span></div>`).join('');
+}
+function renderClass(){
+  const w=document.getElementById('classWrap'); w.style.display=S.list.length?'grid':'none'; if(!S.list.length) return;
+  const tot={}, who={};
+  S.list.forEach(a=>Object.entries(a.m.byReason).forEach(([r,n])=>{ tot[r]=(tot[r]||0)+n; who[r]=(who[r]||0)+1; }));
+  const rows=Object.keys(tot).sort((p,q)=>tot[q]-tot[p]);
+  const none=S.list.filter(a=>!a.m.blocks).length;
+  document.getElementById('stumbleCard').innerHTML=rows.length
+    ? hbars(rows.map(r=>[blockLabel(r),tot[r]]),Math.max(...rows.map(r=>tot[r])),css('--warn'))
+      +`<div class="muted" style="margin-top:8px">${rows.map(r=>`${esc(blockLabel(r))}：${who[r]}人`).join('　')}　／　通知なし：${none}人（全${S.list.length}人）</div>`
+    : `<div class="muted">作法の通知は記録されていません（全${S.list.length}人）。</div>`;
+  const dist={}; S.list.forEach(a=>{ const k=a.m.maxE?'E'+a.m.maxE:'Eなし'; dist[k]=(dist[k]||0)+1; });
+  const keys=Object.keys(dist).sort((p,q)=>(p==='Eなし'?0:+p.slice(1))-(q==='Eなし'?0:+q.slice(1)));
+  document.getElementById('depthCard').innerHTML=hbars(keys.map(k=>[k==='Eなし'?'E がない（原因が未接続）':k==='E1'?'E1（間の変化を挟んでいない）':k+'（'+(+k.slice(1)-1)+'段の途中の変化）',dist[k]]),Math.max(...keys.map(k=>dist[k])),css('--info'))
+    +'<div class="muted" style="margin-top:8px">人数。E1 だけの図は「原因と結果の間を省略している」可能性があります。</div>';
+}
+
+/* ============================================================
+   詳細
+   ============================================================ */
+const nodeName=(a,id)=>{ const n=a.nodeById[id]; return n?(n.base||(n.ntype==='patient'?'患者情報':id)):(id?'（削除済み '+id+'）':''); };
+const typeName=t=>(NTYPE[t]||[t||''])[0];
+function describe(a,e){
+  const N=id=>esc(nodeName(a,id));
+  const edgeParts=id=>{ const m=/^e_(.+?)_(n\d+)$/.exec(id||''); return m?N(m[1])+' ➔ '+N(m[2]):esc(id); };
+  switch(e.action){
+    case 'add_node': return ['情報を置く',e.type==='patient'?`<b>${N(e.id)}</b>`:`<b>${esc(typeName(e.type))}${e.carekind?'（'+esc(e.carekind)+'）':''}</b>：${N(e.id)}${e.supp?`（根拠データ${e.supp}件）`:''}`];
+    case 'add_supp': return ['根拠データを追加',`${N(e.id)}（${e.kind==='subj'?'主観':e.kind==='obj'?'客観':esc(e.kind||'')}）`];
+    case 'delete_supp': return ['根拠データを削除',N(e.id)];
+    case 'add_edge': return ['線を引く',`${N(e.source)} ➔ ${N(e.target)}${e.potential?'（点線）':''}`];
+    case 'blocked_edge': return ['作法の通知',`${esc(blockLabel(e.reason))}：${N(e.source)} ➔ ${N(e.target)}`];
+    case 'blocked_add': return ['作法の通知',`${esc(blockLabel(e.reason))}（${esc(typeName(e.type))}）`];
+    case 'delete_node': return ['情報を削除',`${esc(typeName(e.ntype||a.typeById[e.id]))}：${N(e.id)}`];
+    case 'delete_edge': return ['線を削除',edgeParts(e.id)];
+    case 'toggle_edge': return ['実線／点線の切替',edgeParts(e.id)];
+    case 'reorder_diagnosis': return ['診断の並べ替え',(e.order||[]).map((id,i)=>'#'+(i+1)+' '+N(id)).join('、')];
+    case 'pes_role': return ['E/S の自動判定',`${edgeParts(e.id)} を <b>${esc(e.pes)}</b> と判定`];
+    case 'phase_click': return ['画面の切替',esc({input:'① 情報入力',link:'② つながりの吟味',reflect:'③ 課題の導出'}[e.phase]||e.phase)];
+    case 'open_review': return ['ふりかえりを開く',''];
+    case 'save_json': return ['保存',`情報${e.nodes}・線${e.edges}`];
+    case 'load_json': return ['ファイルを開く',`情報${e.nodes}・線${e.edges}`];
+    case 'resume_autosave': return ['続きから再開',''];
+    case 'export_print': return ['印刷 / PDF',`情報${e.nodes}・線${e.edges}`];
+    case 'print_blocked_missing_care': return ['作法の通知',`看護計画のない連鎖が${e.count}つある状態で印刷しようとした`];
+    case 'tutorial_start': return ['チュートリアル開始',''];
+    case 'tutorial_complete': return ['チュートリアル完了',''];
+    case 'tutorial_exit': return ['チュートリアル中断',e.step!=null?`${e.step+1} / ${e.total} ステップで終了`:''];
+    default: { const {t,action,...rest}=e; return [esc(action),esc(JSON.stringify(rest))]; }
+  }
+}
+function renderDetail(){
+  const box=document.getElementById('detail'); const a=S.list[S.sel];
+  if(!a){ box.style.display='none'; return; } box.style.display='block';
+  const m=a.m;
+  document.getElementById('dName').textContent=a.name;
+  document.getElementById('dMeta').textContent=m.start?`${clock(m.start)} 〜 ${clock(m.end)}　／　操作 ${a.L.length}件`:'操作の記録がありません';
+  const chip=(k,v)=>`<span class="chip">${k} <b>${v}</b></span>`;
+  document.getElementById('dChips').innerHTML=[
+    chip('作業時間',mmss(m.active)),chip('セッション',m.sessions),chip('置いた情報',m.adds),chip('引いた線',m.edgesAdded),
+    chip('先に置いた割合',pct(m.beforeRatio)),chip('最初の診断の位置',pct(m.firstDiagPos)),
+    chip('作法の通知',m.blocks),chip('削除',m.dels),chip('線種切替',m.toggles),chip('並べ替え',m.reorders),
+    chip('最深のE',m.maxE?'E'+m.maxE:'—'),chip('未接続',m.unlinked)].join('')
+    +Object.entries(m.byReason).map(([r,n])=>`<span class="chip" style="background:var(--warn-bg);border-color:#e5c6c1">${esc(blockLabel(r))} <b>${n}</b></span>`).join('');
+  renderTimeline(a); renderMini(a); renderEvents(a);
+}
+function renderTimeline(a){
+  const svg=document.getElementById('tl'), W=svg.clientWidth||1000, H=96, padL=8, padR=8, rowH=17, top=6;
+  const T=Math.max(a.m.active,1);
+  const x=v=>padL+(W-padL-padR)*v/T;
+  let s=`<rect x="0" y="0" width="${W}" height="${H}" fill="none"/>`;
+  Object.values(CAT).forEach(c=>{ s+=`<line x1="${padL}" x2="${W-padR}" y1="${top+c.row*rowH+rowH/2}" y2="${top+c.row*rowH+rowH/2}" stroke="#ece8de"/>`; });
+  a.breaks.forEach(b=>{ s+=`<line x1="${x(b)}" x2="${x(b)}" y1="0" y2="${H}" stroke="#a39d91" stroke-dasharray="3 3"/>`; });
+  a.L.forEach((e,i)=>{ const c=CAT[catOf(e.action)], cx=x(a.at[i]), cy=top+c.row*rowH+rowH/2, [lab]=describe(a,e);
+    s+=`<rect x="${cx-2}" y="${cy-6}" width="4" height="12" rx="1" fill="${c.color}" opacity=".85"><title>${mmss(a.at[i])}　${lab}</title></rect>`; });
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML=s;
+  document.getElementById('tlLegend').innerHTML=Object.values(CAT).map(c=>`<span><i style="background:${c.color}"></i>${c.label}</span>`).join('')+`<span>横軸：作業時間 0:00 〜 ${mmss(a.m.active)}</span>`;
+}
+function renderMini(a){
+  const svg=document.getElementById('mini'); const nodes=(a.d.nodes||[]).filter(n=>n&&n.data&&n.position);
+  if(!nodes.length){ svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#6b6459" font-size="13">図がありません</text>'; svg.removeAttribute('viewBox'); return; }
+  const BH=34, pos={}, lab={}, bw={};
+  const labelOf=n=>{ const t=n.data.ntype; let s=t==='patient'?('患者 '+(n.data.pname||'')):((t==='care'?(n.data.carekind||'')+': ':'')+(n.data.base||'')); return s.length>14?s.slice(0,13)+'…':s; };
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+  nodes.forEach(n=>{ const p=n.position, id=n.data.id; pos[id]=p; lab[id]=labelOf(n);
+    bw[id]=Math.max(56,[...lab[id]].reduce((w,c)=>w+(/[ -~]/.test(c)?7:12.5),0)+20);
+    x1=Math.min(x1,p.x-bw[id]/2); x2=Math.max(x2,p.x+bw[id]/2); y1=Math.min(y1,p.y-BH/2); y2=Math.max(y2,p.y+BH/2); });
+  const pad=20; svg.setAttribute('viewBox',`${x1-pad} ${y1-pad} ${x2-x1+2*pad} ${y2-y1+2*pad}`);
+  let s=`<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${css('--edge')}"/></marker></defs>`;
+  // p から q へ向かう線が、q の枠に当たる点
+  const clip=(p,q,w)=>{ const dx=q.x-p.x, dy=q.y-p.y; const t=Math.min(Math.abs(dx)>0?(w/2)/Math.abs(dx):Infinity,Math.abs(dy)>0?(BH/2)/Math.abs(dy):Infinity); return {x:q.x-dx*Math.min(t,1),y:q.y-dy*Math.min(t,1)}; };
+  (a.d.edges||[]).forEach(e=>{ if(!e.data) return; const p=pos[e.data.source], q=pos[e.data.target]; if(!p||!q) return;
+    const st=clip(q,p,bw[e.data.source]), en=clip(p,q,bw[e.data.target]);
+    s+=`<line x1="${st.x}" y1="${st.y}" x2="${en.x}" y2="${en.y}" stroke="${css('--edge')}" stroke-width="1.6" ${e.potential?'stroke-dasharray="5 4"':''} marker-end="url(#ah)"/>`; });
+  nodes.forEach(n=>{ const p=n.position, t=n.data.ntype, id=n.data.id, w=bw[id], col=css((NTYPE[t]||NTYPE.info)[1]);
+    s+=`<g><title>${esc(typeName(t))}：${esc(n.data.base||n.data.pname||'')}</title><rect x="${p.x-w/2}" y="${p.y-BH/2}" width="${w}" height="${BH}" rx="7" fill="#fff" stroke="${col}" stroke-width="${t==='diagnosis'?3:1.8}"/>`
+       +`<text x="${p.x}" y="${p.y+4.5}" text-anchor="middle" font-size="12" fill="#23201b">${esc(lab[id])}</text></g>`; });
+  svg.innerHTML=s;
+}
+function renderEvents(a){
+  const rows=[]; let sess=1;
+  rows.push(`<tr class="sess"><td colspan="3">セッション 1</td></tr>`);
+  a.L.forEach((e,i)=>{
+    if(i>0&&(e.action==='load_json'||e.action==='resume_autosave')) rows.push(`<tr class="sess"><td colspan="3">セッション ${++sess}（${clock(e.t)}）</td></tr>`);
+    const c=CAT[catOf(e.action)], [lab,detail]=describe(a,e);
+    rows.push(`<tr><td class="t">${mmss(a.at[i])}</td><td><span class="tag" style="background:${c.color}">${lab}</span></td><td>${detail}</td></tr>`);
+  });
+  document.querySelector('#ev tbody').innerHTML=rows.join('');
+}
+
+/* ============================================================
+   CSV（Excelで文字化けしないよう BOM 付き UTF-8）
+   ============================================================ */
+function csv(rows){ return '﻿'+rows.map(r=>r.map(v=>{ v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(',')).join('\r\n'); }
+function download(name,text){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+const stamp=()=>new Date().toLocaleString('ja-JP').replace(/[\/:\s]/g,'-');
+document.getElementById('csvSum').onclick=()=>{
+  const reasons=[...new Set(S.list.flatMap(a=>Object.keys(a.m.byReason)))];
+  const head=['学生','開始','終了','作業時間_秒','セッション数','置いた情報','引いた線','最終の情報数','最終の線数','先に置いた割合','最初の診断の位置',
+    '作法の通知',...reasons.map(r=>'通知:'+blockLabel(r)),'削除','線種切替','並べ替え','修正率','最深のE','Sの線数','看護診断','看護ケア','未接続','ふりかえり回数','チュートリアル'];
+  const r3=v=>v==null?'':Math.round(v*1000)/1000;
+  const rows=sortedList().map(({a})=>{ const m=a.m; return [a.name,m.start?new Date(m.start).toISOString():'',m.end?new Date(m.end).toISOString():'',Math.round(m.active/1000),m.sessions,
+    m.adds,m.edgesAdded,m.finalNodes,m.finalEdges,r3(m.beforeRatio),r3(m.firstDiagPos),m.blocks,...reasons.map(r=>m.byReason[r]||0),
+    m.dels,m.toggles,m.reorders,r3(m.fixRate),m.maxE,m.sCount,m.diagnoses,m.cares,m.unlinked,m.reviews,m.tut]; });
+  download(`関連図ログ_一覧_${stamp()}.csv`,csv([head,...rows]));
+};
+document.getElementById('csvEv').onclick=()=>{
+  const head=['学生','セッション','時刻','経過_作業時間_秒','操作','分類','内容','元データ'];
+  const strip=h=>h.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+  const rows=[];
+  S.list.forEach(a=>{ let sess=1; a.L.forEach((e,i)=>{ if(i>0&&(e.action==='load_json'||e.action==='resume_autosave')) sess++;
+    const [lab,det]=describe(a,e); const {t,...raw}=e;
+    rows.push([a.name,sess,new Date(e.t).toISOString(),Math.round(a.at[i]/100)/10,e.action,CAT[catOf(e.action)].label,strip(det),JSON.stringify(raw)]); }); });
+  download(`関連図ログ_全操作_${stamp()}.csv`,csv([head,...rows]));
+};
+
+/* ============================================================
+   描画
+   ============================================================ */
+function render(){
+  const n=S.list.length;
+  document.getElementById('count').textContent=n?`${n}人分を読み込み済み`:'まだ読み込まれていません';
+  ['csvSum','csvEv','clear'].forEach(id=>document.getElementById(id).disabled=!n);
+  if(S.sel>=n) S.sel=-1;
+  if(S.sel<0&&n) S.sel=sortedList()[0].i;
+  renderTable(); renderClass(); renderDetail();
+}
+window.addEventListener('resize',()=>{ const a=S.list[S.sel]; if(a) renderTimeline(a); });
+</script>
+</body>
+</html>
