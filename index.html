@@ -516,17 +516,17 @@ const CY_STYLE=[
     { selector:'node.hl', style:{'underlay-color':'#e8a33d','underlay-opacity':.4,'underlay-padding':8,'underlay-shape':'round-rectangle','border-color':'#e8a33d','border-width':3}},
     { selector:'node.hl.hlb', style:{'underlay-opacity':.25,'underlay-padding':12}},
     { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
-    /* 直交ルーティング・ラベルなし。始点はJSで分散。 */
+    /* 直交ルーティング：経路は ORouter が計算し、折れ点を segments で与える（下の taxi は計算前の仮表示） */
     { selector:'edge', style:{
         'width':2,'line-color':'#5a5449','target-arrow-color':'#5a5449','target-arrow-shape':'triangle','arrow-scale':1.1,
         'curve-style':'taxi','taxi-turn':'40%','taxi-turn-min-distance':'8px',
-        'source-endpoint':'outside-to-node','target-endpoint':'outside-to-node'}},
+        'source-endpoint':'outside-to-node','target-endpoint':'outside-to-node','edge-distances':'node-position'}},
     /* 看護診断(P)へ入る矢印だけラベル+色分け。E=原因・関連因子 / S=症状・根拠データ */
     { selector:'edge[pes]', style:{
         'label':'data(pesLabel)','font-size':'10px','font-weight':'bold',
         'font-family':'Hiragino Kaku Gothic ProN, sans-serif',
         'text-background-color':'#f7f5ef','text-background-opacity':1,'text-background-padding':'2px',
-        'text-rotation':'autorotate'}},
+        'text-rotation':'none'}},
     { selector:'edge[pes="E"]', style:{'line-color':'#c15a2e','target-arrow-color':'#c15a2e','color':'#c15a2e','width':2.5}},
     { selector:'edge[pes="S"]', style:{'line-color':'#2e8b8b','target-arrow-color':'#2e8b8b','color':'#2e8b8b','width':2.5}},
     /* 看護計画 ➔ 働きかける原因（二重線）：淡い線を、濃い縁取りで挟んで二重線に見せる */
@@ -542,38 +542,322 @@ const cy = cytoscape({
 });
 
 /* ============================================================
-   始点分散: 同じノードから出る複数の線を、縁に沿って散らし、
-   進行方向の側から出す（どこから出た線か分かるように）
+   直交ルーティング（ORouter）
+   ・矢印は縦横のみ。ノードを避け、曲がり・交差・他の線との重なりが少ない経路を選ぶ
+   ・同じ辺から出入りする線は、曲がる方向に合わせて辺に沿って散らす（線どうしが絡まないように）
+   ・計算した折れ点は Cytoscape の segments で描く（クリック・右クリック・点線・二重線はそのまま）
+   ・交差する所は、重ねた SVG に「ジャンプ（半円の橋）」で示す。印刷画像にも同じ印を描く
+   ・ノードの配置は動かさない（学生がどこに何を置いたかは、思考の表れなので）
    ============================================================ */
-function spreadEndpointsOf(c){
-  c.nodes().forEach(src=>{
-    const outs=src.outgoers('edge'); if(!outs.length) return;
-    // まず各線の出る辺（右/左/下/上）を決め、同じ辺から出る線どうしで散らす
-    const groups={};
-    outs.forEach(e=>{
-      const t=e.target();
-      const dx=t.position('x')-src.position('x'), dy=t.position('y')-src.position('y');
-      const dir = Math.abs(dx)>=Math.abs(dy) ? (dx>=0?'rightward':'leftward') : (dy>=0?'downward':'upward');
-      (groups[dir]=groups[dir]||[]).push(e);
+const ORouter=(()=>{
+  const M=16;          // ノードとの間隔（px）。最後の区間はこの長さで辺に垂直に入る
+  const BEND=40;       // 曲がり1回のコスト
+  const CROSS=160;     // 交差1か所のコスト
+  const OVERLAP=6;     // 他の線と重なって走る長さ1pxあたりのコスト
+  const SOFT=3;        // ノードのすぐ近く（間隔の内側）を通る長さ1pxあたりのコスト
+  const HOP_R=6;       // ジャンプの半径
+  const DX=[1,0,-1,0], DY=[0,1,0,-1];   // 方向 0:右 1:下 2:左 3:上（＝その向きに外を向く辺）
+  const AXIS=d=>d&1;                       // 0:横 1:縦
+  const NS='http://www.w3.org/2000/svg';
+
+  const boxOf=n=>{ const p=n.position(), w=n.outerWidth(), h=n.outerHeight();
+    return {id:n.id(),cx:p.x,cy:p.y,x1:p.x-w/2,x2:p.x+w/2,y1:p.y-h/2,y2:p.y+h/2,w,h}; };
+  const port=(b,s,off)=> s===0?{x:b.x2,y:b.cy+off} : s===2?{x:b.x1,y:b.cy+off} : s===1?{x:b.cx+off,y:b.y2} : {x:b.cx+off,y:b.y1};
+  const stubOf=(p,s)=>({x:p.x+DX[s]*M, y:p.y+DY[s]*M});
+
+  function uniq(a){ a.sort((p,q)=>p-q); const o=[]; for(const v of a){ if(!o.length||v-o[o.length-1]>0.75) o.push(v); } return o; }
+  function withMid(a){ const o=[a[0]]; for(let i=1;i<a.length;i++){ if(a[i]-a[i-1]>4*M) o.push((a[i]+a[i-1])/2); o.push(a[i]); } return o; }
+  function lb(a,v){ let lo=0,hi=a.length; while(lo<hi){ const m=(lo+hi)>>1; if(a[m]<v) lo=m+1; else hi=m; } return lo; }
+  function nearest(a,v){ const i=lb(a,v); if(i===0) return 0; if(i>=a.length) return a.length-1; return (v-a[i-1]<=a[i]-v)?i-1:i; }
+  const idxAt=(g,p)=>nearest(g.ys,p.y)*g.nx+nearest(g.xs,p.x);
+  const ptOf=(g,i)=>({x:g.xs[i%g.nx], y:g.ys[(i/g.nx)|0]});
+
+  /* 経路の候補点（格子）：ノードの縁から間隔Mの線・中心線・出入口の線と、その中間 */
+  function buildGrid(boxes,ex,ey){
+    let xs=[...ex], ys=[...ey], minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    boxes.forEach(b=>{ xs.push(b.x1-M,b.cx,b.x2+M); ys.push(b.y1-M,b.cy,b.y2+M);
+      minX=Math.min(minX,b.x1); maxX=Math.max(maxX,b.x2); minY=Math.min(minY,b.y1); maxY=Math.max(maxY,b.y2); });
+    xs.push(minX-4*M,maxX+4*M); ys.push(minY-4*M,maxY+4*M);
+    xs=withMid(uniq(xs)); ys=withMid(uniq(ys));
+    const nx=xs.length, ny=ys.length, N=nx*ny, hard=new Uint8Array(N), soft=new Uint8Array(N);
+    const mark=(x1,x2,y1,y2,arr)=>{ for(let i=lb(xs,x1);i<nx&&xs[i]<x2;i++) for(let j=lb(ys,y1);j<ny&&ys[j]<y2;j++) arr[j*nx+i]=1; };
+    boxes.forEach(b=>{ mark(b.x1+0.5,b.x2-0.5,b.y1+0.5,b.y2-0.5,hard);              // ノードの中は通れない
+                       mark(b.x1-M+0.5,b.x2+M-0.5,b.y1-M+0.5,b.y2+M-0.5,soft); });  // すぐ近くは通りにくい
+    return {xs,ys,nx,ny,N,hard,soft};
+  }
+  /* 使用状況：EH/EV=隣の点への区間を何本の線が使っているか、H/V=その点を横/縦に通る線の本数 */
+  const newOcc=N=>({EH:new Uint16Array(N),EV:new Uint16Array(N),H:new Uint16Array(N),V:new Uint16Array(N)});
+  function occupy(g,occ,path,sign){
+    const sh=new Set(), sv=new Set();
+    for(let k=0;k+1<path.length;k++){ const a=path[k], b=path[k+1]; if(a===b) continue; const ek=Math.min(a,b);
+      if(((a/g.nx)|0)===((b/g.nx)|0)){ occ.EH[ek]+=sign; sh.add(a); sh.add(b); } else { occ.EV[ek]+=sign; sv.add(a); sv.add(b); } }
+    sh.forEach(i=>occ.H[i]+=sign); sv.forEach(i=>occ.V[i]+=sign);
+  }
+
+  /* A*探索（状態＝格子点×進行方向）。作業用の配列は使い回す */
+  let G=null, FROM=null, STAMP=null, CLOSED=null, stamp=0;
+  function ensure(n){ if(!G||G.length<n){ G=new Float64Array(n); FROM=new Int32Array(n); STAMP=new Uint32Array(n); CLOSED=new Uint32Array(n); } }
+  function Heap(){ const f=[],s=[];
+    return { size:()=>f.length, f:0, s:0,
+      push(fv,sv){ f.push(fv); s.push(sv); let i=f.length-1;
+        while(i>0){ const p=(i-1)>>1; if(f[p]<=fv) break; f[i]=f[p]; s[i]=s[p]; i=p; } f[i]=fv; s[i]=sv; },
+      pop(){ const tf=f[0], ts=s[0], lf=f.pop(), ls=s.pop(), n=f.length;
+        if(n){ let i=0; for(;;){ const l=2*i+1, r=l+1; let m=-1, mf=lf;
+            if(l<n&&f[l]<mf){ m=l; mf=f[l]; } if(r<n&&f[r]<mf){ m=r; }
+            if(m<0) break; f[i]=f[m]; s[i]=s[m]; i=m; }
+          f[i]=lf; s[i]=ls; }
+        this.f=tf; this.s=ts; } }; }
+  const W=1.6;   // 推定コストの重み（>1で探索が速くなる。経路はわずかに遠回りになりうる）
+  function search(g,occ,starts,goals,ovScale,pad){
+    const {xs,ys,nx,ny,N,hard,soft}=g;
+    // 他のノードの中に埋もれた出入口は使えない（全域を探し回るのを防ぐ）
+    starts=starts.filter(q=>!hard[q.idx]); goals=goals.filter(q=>!hard[q.idx]);
+    if(!starts.length||!goals.length) return null;
+    ensure(N*4); stamp++;
+    // 探索範囲：始点・終点を囲む枠＋pad（見つからなければ全体で探し直す）
+    let wi0=0,wi1=nx-1,wj0=0,wj1=ny-1;
+    if(pad){ let x1=Infinity,x2=-Infinity,y1=Infinity,y2=-Infinity;
+      [...starts,...goals].forEach(q=>{ const p=ptOf(g,q.idx); x1=Math.min(x1,p.x); x2=Math.max(x2,p.x); y1=Math.min(y1,p.y); y2=Math.max(y2,p.y); });
+      wi0=lb(xs,x1-pad); wi1=Math.min(nx-1,lb(xs,x2+pad)); wj0=lb(ys,y1-pad); wj1=Math.min(ny-1,lb(ys,y2+pad)); }
+    const goalAt=new Map(); goals.forEach((q,k)=>{ (goalAt.get(q.idx)||goalAt.set(q.idx,[]).get(q.idx)).push(k); });
+    const gp=goals.map(q=>ptOf(g,q.idx));
+    const h=idx=>{ const x=xs[idx%nx], y=ys[(idx/nx)|0]; let m=Infinity; for(const p of gp){ const v=Math.abs(x-p.x)+Math.abs(y-p.y); if(v<m) m=v; } return m*W; };
+    const Hp=Heap();
+    starts.forEach((st,k)=>{ const s=st.idx*4+st.dir; if(STAMP[s]!==stamp||G[s]>st.cost){ STAMP[s]=stamp; G[s]=st.cost; FROM[s]=-1-k; Hp.push(st.cost+h(st.idx),s); } });
+    let best=Infinity, bestS=-1, bestK=-1, pops=0;
+    while(Hp.size()){
+      Hp.pop(); const f=Hp.f, s=Hp.s; if(f>=best) break; if(CLOSED[s]===stamp) continue; CLOSED[s]=stamp;
+      if(++pops>(pad?25000:80000)) break;
+      const idx=s>>2, dir=s&3, gs=G[s], gl=goalAt.get(idx);
+      if(gl) for(const k of gl){ const q=goals[k];
+        const extra=(dir===q.dir?0:(dir===((q.dir+2)&3)?2*BEND:BEND))+q.cost;
+        if(gs+extra<best){ best=gs+extra; bestS=s; bestK=k; } }
+      const i=idx%nx, j=(idx/nx)|0;
+      for(let d=0;d<4;d++){
+        if(d===((dir+2)&3)) continue;                       // 引き返さない
+        const ni=i+DX[d], nj=j+DY[d]; if(ni<wi0||nj<wj0||ni>wi1||nj>wj1) continue;
+        const nidx=nj*nx+ni; if(hard[nidx]&&!goalAt.has(nidx)) continue;
+        const len=AXIS(d)?Math.abs(ys[nj]-ys[j]):Math.abs(xs[ni]-xs[i]);
+        let c=len;
+        if(d!==dir) c+=BEND+CROSS*(AXIS(d)?occ.H[idx]:occ.V[idx]);  // ここで曲がると、他の線とT字に触れる
+        if(soft[nidx]||soft[idx]) c+=len*SOFT;
+        const ek=Math.min(idx,nidx), use=AXIS(d)?occ.EV[ek]:occ.EH[ek];
+        if(use) c+=len*OVERLAP*use*ovScale;                  // 他の線と重なって走る
+        c+=CROSS*(AXIS(d)?occ.H[nidx]:occ.V[nidx]);           // 他の線を横切る
+        const ns=nidx*4+d, ng=gs+c;
+        if(STAMP[ns]!==stamp){ STAMP[ns]=stamp; G[ns]=Infinity; }
+        if(ng<G[ns]){ G[ns]=ng; FROM[ns]=s; Hp.push(ng+h(nidx),ns); }
+      }
+    }
+    if(bestS<0) return null;
+    const path=[]; let s=bestS, startK=0;
+    for(let guard=0;guard<N*4;guard++){ path.push(s>>2); const p=FROM[s]; if(p<0){ startK=-1-p; break; } s=p; }
+    path.reverse(); api.pops+=pops;
+    return {path,start:starts[startK].side,goal:goals[bestK].side};
+  }
+
+  function find(g,occ,starts,goals,ov){ return search(g,occ,starts,goals,ov,6*M)||search(g,occ,starts,goals,ov,0); }
+  function compress(a){ const o=[]; const eq=(u,v)=>Math.abs(u-v)<0.01;
+    for(const p of a){ const L=o[o.length-1]; if(L&&eq(L.x,p.x)&&eq(L.y,p.y)) continue; o.push({x:p.x,y:p.y});
+      while(o.length>=3){ const A=o[o.length-3],B=o[o.length-2],C=o[o.length-1];
+        if((eq(A.x,B.x)&&eq(B.x,C.x))||(eq(A.y,B.y)&&eq(B.y,C.y))) o.splice(o.length-2,1); else break; } }
+    return o; }
+  // 相手のほうを向いた辺を少し優先する
+  const sideCost=(b,o,s)=> (DX[s]*(o.cx-b.cx)+DY[s]*(o.cy-b.cy))>0 ? 0 : 30;
+  // 辺の上での並び順：先に曲がる線ほど、曲がる側の端に置く（出口付近で線が交差しないように）
+  function sideKey(g,it,role,s){
+    const along=(s&1)?'x':'y', across=(s&1)?'y':'x', b=role==='s'?it.sb:it.tb, o=role==='s'?it.tb:it.sb;
+    let pts=it.p1?compress(it.p1.map(i=>ptOf(g,i))):null; if(pts&&role==='t') pts.reverse();
+    if(!pts||pts.length<2) return ((s&1)?o.cx-b.cx:o.cy-b.cy)*1e-3;
+    let k=1; while(k<pts.length&&Math.abs(pts[k][along]-pts[k-1][along])<0.5) k++;
+    if(k>=pts.length) return 0;
+    const turn=Math.sign(pts[k][along]-pts[k-1][along]), dist=Math.abs(pts[k-1][across]-pts[0][across]);
+    return turn<0 ? -1e6+dist : 1e6-dist;
+  }
+
+  /* 全ての矢印の経路を計算して適用し、[{e, pts:[始点,...,終点]}] を返す */
+  function route(c){
+    const boxes=new Map(); c.nodes().filter(n=>n.visible()).forEach(n=>boxes.set(n.id(),boxOf(n)));
+    const bl=[...boxes.values()];
+    const E=c.edges().filter(e=>e.visible()&&e.source().id()!==e.target().id()&&boxes.has(e.source().id())&&boxes.has(e.target().id()))
+      .map(e=>{ const sb=boxes.get(e.source().id()), tb=boxes.get(e.target().id());
+        return {e,sb,tb,d:Math.abs(sb.cx-tb.cx)+Math.abs(sb.cy-tb.cy)}; })
+      .sort((a,b)=>a.d-b.d||(a.e.id()<b.e.id()?-1:1));
+    if(!E.length) return [];
+    // ① どの辺から出入りするかを決める（出入口は辺の中央、4辺すべてを候補に探索）
+    let g=buildGrid(bl,[],[]), occ=newOcc(g.N);
+    E.forEach(it=>{
+      const starts=[], goals=[];
+      for(let s=0;s<4;s++){
+        starts.push({side:s,idx:idxAt(g,stubOf(port(it.sb,s,0),s)),dir:s,cost:sideCost(it.sb,it.tb,s)});
+        goals.push({side:s,idx:idxAt(g,stubOf(port(it.tb,s,0),s)),dir:(s+2)&3,cost:sideCost(it.tb,it.sb,s)});
+      }
+      const r=find(g,occ,starts,goals,0.25);
+      if(r){ it.ss=r.start; it.ts=r.goal; it.p1=r.path; occupy(g,occ,r.path,1); }
+      else { const dx=it.tb.cx-it.sb.cx, dy=it.tb.cy-it.sb.cy;
+        it.ss=Math.abs(dx)>=Math.abs(dy)?(dx>=0?0:2):(dy>=0?1:3); it.ts=(it.ss+2)&3; it.p1=null; }
     });
-    Object.keys(groups).forEach(dir=>{
-      const g=groups[dir], k=g.length;
-      g.forEach((e,i)=>{
-        const spread = k>1 ? ((i/(k-1))-0.5)*64 : 0;   // -32%..32%
-        let ex,ey;
-        if(dir==='rightward'){ ex=50; ey=spread; } else if(dir==='leftward'){ ex=-50; ey=spread; }
-        else if(dir==='downward'){ ey=50; ex=spread; } else { ey=-50; ex=spread; }
-        e.style('source-endpoint',`${ex}% ${ey}%`);
-        e.style('taxi-direction',dir);
-      });
+    // ② 同じ辺を使う線を、辺に沿って散らす
+    const groups=new Map(), add=(k,v)=>{ (groups.get(k)||groups.set(k,[]).get(k)).push(v); };
+    E.forEach(it=>{ add(it.sb.id+'\u0000'+it.ss,{it,role:'s',s:it.ss,b:it.sb}); add(it.tb.id+'\u0000'+it.ts,{it,role:'t',s:it.ts,b:it.tb}); });
+    groups.forEach(list=>{
+      list.forEach(o=>o.key=sideKey(g,o.it,o.role,o.s));
+      list.sort((a,b)=>a.key-b.key||(a.it.e.id()<b.it.e.id()?-1:1));
+      const L=(list[0].s&1)?list[0].b.w:list[0].b.h, span=Math.max(0,L-2*Math.min(14,L*0.2)), k=list.length;
+      const step=k>1?Math.min(span/(k-1),22):0;
+      list.forEach((o,i)=>{ const off=(i-(k-1)/2)*step; if(o.role==='s') o.it.so=off; else o.it.to=off; });
     });
-  });
-}
+    // 向かい合う辺どうしを1本だけで結ぶ線は、まっすぐになるよう出入口の位置をそろえる
+    E.forEach(it=>{
+      if(it.ts!==((it.ss+2)&3)) return;
+      const v=(it.ss&1)===0, A=it.sb, B=it.tb, c1=v?A.cy:A.cx, c2=v?B.cy:B.cx;
+      if((DX[it.ss]*(B.cx-A.cx)+DY[it.ss]*(B.cy-A.cy))<=0) return;     // 向かい合っていない
+      const ia=Math.min(14,(v?A.h:A.w)*0.2), ib=Math.min(14,(v?B.h:B.w)*0.2);
+      const aLo=(v?A.y1:A.x1)+ia, aHi=(v?A.y2:A.x2)-ia, bLo=(v?B.y1:B.x1)+ib, bHi=(v?B.y2:B.x2)-ib;
+      const aOne=groups.get(it.sb.id+'\u0000'+it.ss).length===1, bOne=groups.get(it.tb.id+'\u0000'+it.ts).length===1;
+      const pa=c1+it.so, pb=c2+it.to;
+      if(aOne&&bOne){ const lo=Math.max(aLo,bLo), hi=Math.min(aHi,bHi); if(lo>hi) return;
+        const m=Math.min(hi,Math.max(lo,(c1+c2)/2)); it.so=m-c1; it.to=m-c2; }
+      else if(bOne&&pa>=bLo&&pa<=bHi) it.to=pa-c2;      // 1本だけの側が、相手の位置に合わせる
+      else if(aOne&&pb>=aLo&&pb<=aHi) it.so=pb-c1;
+    });
+    // ③ 出入口を固定して経路を探索し、もう一度ずつ引き直して整える
+    const ex=[], ey=[];
+    E.forEach(it=>{ it.P=port(it.sb,it.ss,it.so); it.Q=port(it.tb,it.ts,it.to);
+      it.Ps=stubOf(it.P,it.ss); it.Qs=stubOf(it.Q,it.ts); ex.push(it.Ps.x,it.Qs.x); ey.push(it.Ps.y,it.Qs.y); });
+    g=buildGrid(bl,ex,ey); occ=newOcc(g.N);
+    const one=it=>{ const r=find(g,occ,[{side:it.ss,idx:idxAt(g,it.Ps),dir:it.ss,cost:0}],[{side:it.ts,idx:idxAt(g,it.Qs),dir:(it.ts+2)&3,cost:0}],1);
+      it.p2=r?r.path:null; if(r) occupy(g,occ,r.path,1); };
+    E.forEach(one);
+    if(!api.dragging) E.forEach(it=>{ if(it.p2) occupy(g,occ,it.p2,-1); one(it); });   // ドラッグ中は省略して軽くする
+    // ④ 折れ点に直して適用
+    const routes=[];
+    c.batch(()=>E.forEach(it=>{
+      let pts=it.p2?it.p2.map(i=>ptOf(g,i)):[it.Ps,{x:it.Qs.x,y:it.Ps.y},it.Qs];
+      if(!it.p2&&(it.ss&1)) pts=[it.Ps,{x:it.Ps.x,y:it.Qs.y},it.Qs];
+      const P={...it.P}, Q={...it.Q}, a=pts[0], z=pts[pts.length-1];
+      if(it.ss&1) P.x=a.x; else P.y=a.y;     // 出入口を格子の線にそろえる（斜めにならないように）
+      if(it.ts&1) Q.x=z.x; else Q.y=z.y;
+      const all=compress([P,...pts,Q]);
+      applyTo(it.e,it.sb,it.tb,all); routes.push({e:it.e,pts:all});
+    }));
+    return routes;
+  }
+  function applyTo(e,sb,tb,pts){
+    const P=pts[0], Q=pts[pts.length-1], mid=pts.slice(1,-1);
+    if(!mid.length) mid.push({x:(P.x+Q.x)/2,y:(P.y+Q.y)/2});   // 折れ点なしでも segments で描く（straight だと端点がずれることがある）
+    const vx=tb.cx-sb.cx, vy=tb.cy-sb.cy, L2=vx*vx+vy*vy, L=Math.sqrt(L2);
+    const st={'source-endpoint':`${P.x-sb.cx}px ${P.y-sb.cy}px`,'target-endpoint':`${Q.x-tb.cx}px ${Q.y-tb.cy}px`};
+    if(L<1){ st['curve-style']='straight'; }
+    else { const ux=vx/L, uy=vy/L;
+      st['curve-style']='segments';
+      st['segment-weights']=mid.map(p=>((p.x-sb.cx)*vx+(p.y-sb.cy)*vy)/L2);
+      st['segment-distances']=mid.map(p=>ux*(p.y-sb.cy)-uy*(p.x-sb.cx)); }
+    e.style(st);
+  }
+
+  /* ラベル（E/S）は、いちばん長い横の区間の中央に置く（ノードの下に隠れないように） */
+  /* 交差（ジャンプ）の位置も避けて、文字が収まるいちばん広い所を選ぶ */
+  function placeLabel(r,hops){
+    const e=r.e, text=e.data('pesLabel'); if(!text){ e.removeStyle('text-margin-x text-margin-y'); return; }
+    const half=String(text).length*5+6;      // 10px の文字幅から見積もった、ラベルの半分の幅
+    let want=null, wantRoom=-1, any=null, anyLen=-1;
+    for(let k=0;k+1<r.pts.length;k++){ const a=r.pts[k], b=r.pts[k+1], len=Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+      if(len>anyLen){ anyLen=len; any={x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
+      if(Math.abs(a.y-b.y)>=0.01) continue;
+      const x1=Math.min(a.x,b.x)+18, x2=Math.max(a.x,b.x)-18; if(x2<=x1) continue;
+      const cuts=hops.filter(h=>Math.abs(h.y-a.y)<0.01&&h.x>x1-10&&h.x<x2+10).map(h=>[h.x-h.r-3,h.x+h.r+3]).sort((p,q)=>p[0]-q[0]);
+      let from=x1; const gaps=[];
+      cuts.forEach(([u,w])=>{ if(u>from) gaps.push([from,u]); from=Math.max(from,w); }); if(x2>from) gaps.push([from,x2]);
+      gaps.forEach(([u,w])=>{ const room=w-u; if(room>wantRoom){ wantRoom=room; want={x:(u+w)/2,y:a.y}; } });
+    }
+    if(!want||wantRoom<Math.min(2*half,60)) want=want&&wantRoom>=30?want:any;
+    if(!want) return;
+    e.removeStyle('text-margin-x text-margin-y');
+    const mp=e.midpoint();
+    e.style({'text-margin-x':want.x-mp.x,'text-margin-y':want.y-mp.y});
+  }
+  /* 交差の検出：横線と縦線が、どちらの端でもない所で交わる点 */
+  function findHops(routes){
+    const H=[], V=[];
+    routes.forEach((r,ri)=>{ const p=r.pts; for(let k=0;k+1<p.length;k++){ const a=p[k], b=p[k+1];
+      if(Math.abs(a.y-b.y)<0.01) H.push({ri,y:a.y,x1:Math.min(a.x,b.x),x2:Math.max(a.x,b.x)});
+      else V.push({ri,x:a.x,y1:Math.min(a.y,b.y),y2:Math.max(a.y,b.y)}); } });
+    const out=[];
+    H.forEach(h=>V.forEach(v=>{
+      if(h.ri===v.ri||!(v.x>h.x1+0.5&&v.x<h.x2-0.5&&h.y>v.y1+0.5&&h.y<v.y2-0.5)) return;
+      const rh=Math.min(HOP_R,v.x-h.x1-1,h.x2-v.x-1), rv=Math.min(HOP_R,h.y-v.y1-1,v.y2-h.y-1);
+      if(rh>=rv) out.push({x:v.x,y:h.y,r:Math.max(rh,2),o:'h',hop:h.ri,under:v.ri});   // 横線が縦線を飛び越える
+      else       out.push({x:v.x,y:h.y,r:Math.max(rv,2),o:'v',hop:v.ri,under:h.ri});
+    }));
+    return out;
+  }
+  const strokeOf=e=>({col:e.style('line-color'),w:parseFloat(e.style('width'))||2,
+    ow:parseFloat(e.style('line-outline-width'))||0,oc:e.style('line-outline-color')});
+  const stroke=(d,S,fill)=>(S.ow?`<path d="${d}" fill="none" stroke="${S.oc}" stroke-width="${S.w+2*S.ow}"/>`:'')
+                           +`<path d="${d}" fill="none" stroke="${S.col}" stroke-width="${S.w}"/>`;
+  function hopMarkup(routes,hops,bg){
+    let patch='', under='', arc='';
+    hops.forEach(hp=>{
+      const A=strokeOf(routes[hp.hop].e), B=strokeOf(routes[hp.under].e), tA=A.w+2*A.ow, r=hp.r, x=hp.x, y=hp.y;
+      if(hp.o==='h'){
+        patch+=`<rect x="${x-r-0.6}" y="${y-tA/2-1}" width="${2*r+1.2}" height="${tA+2}" fill="${bg}"/>`;
+        under+=stroke(`M${x},${y-tA/2-1.5}V${y+tA/2+1.5}`,B);
+        arc+=stroke(`M${x-r},${y}A${r},${r} 0 0 1 ${x+r},${y}`,A);
+      }else{
+        patch+=`<rect x="${x-tA/2-1}" y="${y-r-0.6}" width="${tA+2}" height="${2*r+1.2}" fill="${bg}"/>`;
+        under+=stroke(`M${x-tA/2-1.5},${y}H${x+tA/2+1.5}`,B);
+        arc+=stroke(`M${x},${y-r}A${r},${r} 0 0 1 ${x},${y+r}`,A);
+      }
+    });
+    return patch+under+arc;
+  }
+
+  /* 画面上の重ね合わせ（パン・ズームに追従） */
+  const layers=new Map();   // container -> {svg,g,routes}
+  function layerOf(c){
+    let L=layers.get(c); if(L) return L;
+    const host=c.container(); if(getComputedStyle(host).position==='static') host.style.position='relative';
+    const svg=document.createElementNS(NS,'svg');
+    svg.setAttribute('aria-hidden','true');
+    svg.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5;overflow:visible';
+    const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg);
+    L={svg,g,routes:[]}; layers.set(c,L);
+    const sync=()=>{ const p=c.pan(); g.setAttribute('transform',`translate(${p.x},${p.y}) scale(${c.zoom()})`); };
+    L.sync=sync; c.on('viewport resize',sync); sync();
+    c.on('select unselect data','edge',()=>scheduleOverlay(c));   // 色が変わったら描き直す
+    return L;
+  }
+  function drawOverlay(c){ const L=layerOf(c); L.g.innerHTML=hopMarkup(L.routes,findHops(L.routes),cssVar('--paper')||'#f7f5ef'); L.sync(); }
+  let ovRAF=false;
+  function scheduleOverlay(c){ if(ovRAF) return; ovRAF=true; requestAnimationFrame(()=>{ ovRAF=false; drawOverlay(c); }); }
+
+  function finish(routes){ const hops=findHops(routes);
+    routes.forEach((r,ri)=>placeLabel(r,hops.filter(h=>h.hop===ri||h.under===ri))); return routes; }
+  function run(c){ if(!c.container()) return; const t0=performance.now(); const L=layerOf(c); L.routes=finish(route(c)); drawOverlay(c); api.lastMs=performance.now()-t0; }
+  let raf=false;
+  function schedule(c){ if(raf) return; raf=true; requestAnimationFrame(()=>{ raf=false; run(c); }); }
+  /* 印刷用：cy.png({full:true}) の画像にぴったり重なる SVG（白地用） */
+  function printOverlay(c){
+    const L=layerOf(c); L.routes=finish(route(c)); drawOverlay(c);
+    const hops=findHops(L.routes); if(!hops.length) return '';
+    const bb=c.elements().boundingBox();
+    return `<svg viewBox="${bb.x1} ${bb.y1} ${bb.w} ${bb.h}" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:100%;height:100%">${hopMarkup(L.routes,hops,'#ffffff')}</svg>`;
+  }
+  const api={run,schedule,printOverlay,lastMs:0,pops:0,dragging:false,
+    stats:c=>{ const L=layerOf(c); return {edges:L.routes.length,hops:findHops(L.routes).length,ms:api.lastMs}; },
+    routesOf:c=>layerOf(c).routes};
+  return api;
+})();
+function spreadEndpointsOf(c){ ORouter.run(c); }
 function spreadEndpoints(){ spreadEndpointsOf(cy); }
-let seRAF=false;
-function scheduleSpread(){ if(seRAF)return; seRAF=true; requestAnimationFrame(()=>{seRAF=false;spreadEndpoints();}); }
+function scheduleSpread(){ ORouter.schedule(cy); }
 cy.on('position','node',scheduleSpread);
+cy.on('add remove',scheduleSpread);        // ノードが増えると、既存の線もよけ直す
+cy.on('data','node',scheduleSpread);       // 文字が変わるとノードの大きさも変わる
 cy.on('layoutstop',spreadEndpoints);
+cy.on('grab','node',()=>{ ORouter.dragging=true; });
+cy.on('free','node',()=>{ ORouter.dragging=false; scheduleSpread(); });   // 置いたら丁寧に引き直す
 
 /* ---- 結線 / 切替 ---- */
 let linkSource=null;
@@ -1339,6 +1623,7 @@ document.getElementById('printBtn').onclick=()=>{
       log('print_blocked_missing_care',{count:missing.length}); return;
     }
   }
+  const hopSvg=ORouter.printOverlay(cy);   // 交差のジャンプ（画像にぴったり重ねる）
   const png=cy.png({full:true,scale:2,bg:'#ffffff',maxWidth:1600});
   const diags=diagnosisOrder.map((id,i)=>`<li><b>#${i+1}</b>　${esc(cy.getElementById(id).data('base'))}</li>`).join('');
   // 看護計画一覧（看護ケア ➔ 働きかける原因）
@@ -1359,7 +1644,7 @@ document.getElementById('printBtn').onclick=()=>{
     ol.d,ul.c{list-style:none;padding:0;font-size:13px}ol.d li,ul.c li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}ul.c b{color:#c15a2e;margin-right:6px}
     .task{font-size:13px;line-height:1.7;white-space:pre-wrap;background:#faf9f5;border:1px solid #d8d2c4;border-radius:6px;padding:10px}</style></head><body>
     <h1>関連図</h1><div class="meta">作成日時: ${now}</div>
-    <div class="fig"><img src="${png}"></div>
+    <div class="fig"><div style="position:relative"><img src="${png}">${hopSvg}</div></div>
     <div class="lg"><span>■患者情報　■発話・主観　■客観データ　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━E（原因・関連因子）</span><span style="color:#2e8b8b">━S（症状・徴候）</span></div>
     ${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}
     ${careList?`<h2>看護計画（OP/TP/EP）と、働きかける原因</h2><ul class="c">${careList}</ul>`:''}
