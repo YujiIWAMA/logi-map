@@ -69,6 +69,8 @@
   .seg button[data-t="info"] .dot{background:var(--info);border-radius:50%}
   .seg button.locked{opacity:.5;cursor:not-allowed}
   .seg button.flash{animation:kflash .5s 2}
+  .seg button.waiting{opacity:.5}
+  .seg button.waiting:hover{opacity:.75}
   @keyframes kflash{50%{box-shadow:0 0 0 4px rgba(154,59,52,.45);border-color:var(--accent)}}
   .supp-lab{font-size:11.5px;color:var(--ink);margin:8px 0 3px;line-height:1.5}
   .supp-lab .sk{display:inline-block;font-size:10.5px;color:#fff;border-radius:4px;padding:0 6px;margin-right:4px;font-weight:700}
@@ -938,8 +940,19 @@ function selectType(t){
   document.getElementById('suppInput').style.display=inf?'block':'none';
   if(NODETEXT_PH[t]) document.getElementById('nodeText').placeholder=NODETEXT_PH[t];
 }
+/* 患者情報がないうちに情報・看護診断・看護ケアを押したとき：患者情報の入力へ促す（エラーではなく案内） */
+function promptPatientFirst(t){
+  log('blocked_add',{reason:'no_patient',type:t,via:'select'});
+  document.querySelectorAll('#toastWrap .toast[data-k="np"]').forEach(x=>x.remove());
+  showToast(KATA.patientFirst,5000);
+  const last=document.querySelector('#toastWrap .toast:last-child'); if(last) last.dataset.k='np';
+  const b=document.querySelector('#typeSeg [data-t="patient"]');
+  if(b){ b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash'); }
+  selectType('patient'); document.getElementById('pName').focus();
+}
 document.getElementById('typeSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b||b.disabled||b.classList.contains('locked')) return;
+  if(!COACH.active && b.dataset.t!=='patient' && cy.nodes('[ntype="patient"]').length===0){ promptPatientFirst(b.dataset.t); return; }
   selectType(b.dataset.t);
   (currentType==='patient'?document.getElementById('pName'):currentType==='care'?document.getElementById('careText'):document.getElementById('nodeText')).focus();
   coachEvent('type_selected',{type:currentType});
@@ -950,8 +963,11 @@ function syncPatientLock(){
   const b=document.querySelector('#typeSeg [data-t="patient"]');
   b.classList.toggle('locked',has); b.setAttribute('aria-disabled',has?'true':'false');
   b.innerHTML='<span class="dot"></span>'+(has?'患者情報（入力済み）':'患者情報');
+  document.querySelectorAll('#typeSeg button:not([data-t="patient"])').forEach(x=>x.classList.toggle('waiting',!has));
   if(has && currentType==='patient') selectType('info');
+  if(!has && currentType!=='patient') selectType('patient');   // 患者情報を消したら、患者情報の入力に戻す
 }
+syncPatientLock();   // 起動時：患者情報がなければ他の3つを控えめに表示
 /* OP/TP/EP の選択 */
 document.getElementById('careSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -1074,6 +1090,7 @@ const KATA={
   toCare:`<span class="lead"><b>【関連図の作法】</b></span>看護計画（OP/TP/EP）は、原因に「働きかける」ものです。原因から看護ケアへ矢印を引くのではなく、<b>看護ケア ➔ 働きかける原因</b>の向き（二重線）で結びましょう。`,
   careTarget:`<span class="lead"><b>【関連図の作法】</b></span>看護ケアの矢印は、働きかける<b>原因（E）や症状（S）</b>へ向けます。患者情報・看護診断・他の看護ケアへは結びません。`,
   noPatient:`<span class="lead"><b>【関連図の作法】</b></span>関連図は<b>患者</b>を起点に描きます。まず「患者情報」（氏名・年齢・病名）を置いてから、情報・看護診断・看護ケアを置きましょう。`,
+  patientFirst:`<span class="lead"><b>まずは「患者情報」から</b></span>関連図は患者を起点に描きます。氏名・年齢・病名を入れて「図に置く」を押すと、情報・看護診断・看護ケアが選べるようになります。`,
   toPatient:`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`
 };
 /* ---- エッジ（PESの作法バリデーション付き）---- */
@@ -1681,17 +1698,8 @@ const nm=key=>{ const id=COACH.ids[key]; const n=id&&cy.getElementById(id); retu
 const COACH_STEPS=[
  {kind:'read', title:'いっしょに1枚描いてみましょう',
   body:'この画面のまま、模擬患者さんの関連図を1枚描きます。<b>光っている所だけ</b>が押せます。入力は、例を見ながら<b>自分で</b>打ち込みます。<br><br><b>症例</b>：航空 太郎さん（90歳）。慢性心不全で入院中。心臓のはたらきが弱く、両下肢にむくみがあります。「足の裏が鈍くて、床を踏んでいる感じがしない」と話し、夜間はトイレまで歩いて行きます。<br><br>いまの図は一時的に退避され、終わると元に戻ります。いつでも「スキップ」できます。'},
- {kind:'click', type:'info', tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
-  body:'置くものは4種類です。患者情報、情報（症状・原因など）、看護診断、看護ケア。まず<b>「情報」</b>を選んでみましょう。',
-  act:'光っている「情報（症状・原因など）」を押します。',
-  res:'入力欄が出ました。情報には、<b>名前</b>のほかに、根拠として<b>主観データ</b>（患者が語ったこと）と<b>客観データ</b>（測った・見た事実）を添えられます。'},
- {kind:'try_add', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
-  title:'そのまま置いてみる（わざと）',
-  body:'「情報の名前」に<b>足底の感覚低下</b>と入力してください。そして、<b>患者情報がない状態</b>で置くとどうなるか、試してみましょう。',
-  act:'入力したら「＋ 図に置く」を押します。',
-  res:'エラーになりました。関連図は<b>患者を起点</b>に描きます。まず患者情報から置きましょう。'},
- {kind:'click', type:'patient', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="patient"]')], title:'「患者情報」を選ぶ',
-  body:'最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
+ {kind:'click', type:'patient', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="patient"]')], title:'まず「患者情報」を選ぶ',
+  body:'左上に、置くものが4種類並んでいます。<b>患者情報</b>、<b>情報</b>（症状・原因など）、<b>看護診断</b>、<b>看護ケア</b>です。<br>関連図は患者を起点に描くので、最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
  {kind:'add', nodeType:'patient', key:'p', tag:'ここに入力して押す', target:()=>[cq('#patientInput'),cq('#addNode')], title:'患者情報を入れる',
   body:'「氏名」に<b>航空 太郎</b>、「年齢」に<b>90</b>、「病名」に<b>慢性心不全</b>と入力してください。',
   act:'入力したら「＋ 図に置く」を押します。',
@@ -1710,9 +1718,6 @@ const COACH_STEPS=[
  {kind:'link', from:'s', to:'d', tag:'', title:'S ➔ P をつなぐ',
   body:'<b>看護診断に直接入る情報がS</b>です。ノードを<b>2つ続けてクリック</b>すると、1つ目から2つ目へ線が引かれます。',
   act:()=>`光っている①「${nm('s')}」→②「${nm('d')}」の順にクリックします。`, res:'線が引かれ、ノードの頭に<b>「S:」</b>の印がつきました。「Pに直接入る情報＝S」と自動で判定されます。'},
- {kind:'try_link', from:'d', to:'s', title:'わざと逆向きにつなぐ',
-  body:'看護診断は結論なので、<b>診断から矢印を出すことはできません</b>。作法を体験するために、わざと逆向きに引いてみます。',
-  act:()=>`光っている①「${nm('d')}」→②「${nm('s')}」の順にクリックします。`, res:'【関連図の作法】が教えてくれました。矢印は必ず<b>「情報 ➔ 診断」</b>の向きです。'},
  {kind:'add', nodeType:'info', key:'e1', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
   title:'E1：Sの原因を置く',
   body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」を考えます。両下肢の浮腫が原因です。Sにつながる原因が<b>E（原因・関連因子）</b>です。<br>「情報の名前」に<b>両下肢の浮腫</b>、「客観」に<b>両下腿に圧痕あり。体重が3日間で2kg増加</b>と入力してください。今度は「主観」が空欄です（どちらか片方でもOK）。',
