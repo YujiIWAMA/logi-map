@@ -414,8 +414,8 @@
       <span><span class="sw" style="background:var(--info)"></span>情報（主観・客観データ付き）</span>
       <span><span class="sw diag"></span>看護診断（二重枠）</span>
       <span><span class="sw" style="background:var(--care)"></span>看護ケア（OP/TP/EP）＝二重線で原因へ</span>
-      <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>E 原因・関連因子</span>
-      <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span>S 症状・徴候</span>
+      <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>原因（E）から結果への矢印</span>
+      <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span>症状・徴候（S）から看護診断への矢印</span>
     </div>
   </section>
 
@@ -523,12 +523,7 @@ const CY_STYLE=[
         'width':2,'line-color':'#5a5449','target-arrow-color':'#5a5449','target-arrow-shape':'triangle','arrow-scale':1.1,
         'curve-style':'taxi','taxi-turn':'40%','taxi-turn-min-distance':'8px',
         'source-endpoint':'outside-to-node','target-endpoint':'outside-to-node','edge-distances':'node-position'}},
-    /* 看護診断(P)へ入る矢印だけラベル+色分け。E=原因・関連因子 / S=症状・根拠データ */
-    { selector:'edge[pes]', style:{
-        'label':'data(pesLabel)','font-size':'10px','font-weight':'bold',
-        'font-family':'Hiragino Kaku Gothic ProN, sans-serif',
-        'text-background-color':'#f7f5ef','text-background-opacity':1,'text-background-padding':'2px',
-        'text-rotation':'none'}},
+    /* 看護診断(P)につながる連鎖の矢印は色分けのみ（文字は付けない。意味は凡例で示す）。E=原因から出る矢印 / S=症状・徴候から診断へ */
     { selector:'edge[pes="E"]', style:{'line-color':'#c15a2e','target-arrow-color':'#c15a2e','color':'#c15a2e','width':2.5}},
     { selector:'edge[pes="S"]', style:{'line-color':'#2e8b8b','target-arrow-color':'#2e8b8b','color':'#2e8b8b','width':2.5}},
     /* 看護計画 ➔ 働きかける原因（二重線）：淡い線を、濃い縁取りで挟んで二重線に見せる */
@@ -1232,7 +1227,7 @@ function updatePES(c,quiet){
     const r=pesRole(e,info);
     if(r){
       if(e.data('pes')!==r.role || e.data('pesLevel')!==r.level){ e.data('pes',r.role); e.data('pesLevel',r.level); if(!quiet) log('pes_role',{id:e.id(),pes:pesTagOf(r.role,r.level)}); }
-      e.data('pesLabel',pesEdgeText(r.role,r.level));
+      e.removeData('pesLabel');   // 矢印に文字は出さない（色＋凡例で示す）
     }
     else if(e.data('pes')!==undefined){ e.removeData('pes'); e.removeData('pesLevel'); e.removeData('pesLabel'); }
   });
@@ -1662,7 +1657,7 @@ document.getElementById('printBtn').onclick=()=>{
     .task{font-size:13px;line-height:1.7;white-space:pre-wrap;background:#faf9f5;border:1px solid #d8d2c4;border-radius:6px;padding:10px}</style></head><body>
     <h1>関連図</h1><div class="meta">作成日時: ${now}</div>
     <div class="fig"><div style="position:relative"><img src="${png}">${hopSvg}</div></div>
-    <div class="lg"><span>■患者情報　■発話・主観　■客観データ　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━E（原因・関連因子）</span><span style="color:#2e8b8b">━S（症状・徴候）</span></div>
+    <div class="lg"><span>■患者情報　■情報（主観・客観データ）　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━原因（E）から結果へ</span><span style="color:#2e8b8b">━症状・徴候（S）から看護診断へ</span></div>
     ${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}
     ${careList?`<h2>看護計画（OP/TP/EP）と、働きかける原因</h2><ul class="c">${careList}</ul>`:''}
     </body></html>`);
@@ -1724,7 +1719,7 @@ const COACH_STEPS=[
   act:'入力したら「＋ 図に置く」を押します。', res:'図に表示されました。今度は<b>「客観：…」</b>の行が入っています。'},
  {kind:'link', from:'e1', to:'s', title:'E ➔ S をつなぐ',
   body:'原因から症状へ、<b>原因 ➔ 結果</b>の向きで引きます。',
-  act:()=>`光っている①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'Sの手前の原因は<b>「E1」</b>です。矢印にも（E1：原因・関連因子）と自動表示されました。'},
+  act:()=>`光っている①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'Sの手前の原因は<b>「E1」</b>です。Eから出る矢印は<b>赤</b>、SからPへの矢印は<b>青緑</b>で色分けされます（色の意味は図の下の凡例にあります）。'},
  {kind:'add', nodeType:'info', key:'e2', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
   title:'さらに原因をさかのぼる',
   body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能の低下です。原因の原因は<b>E2</b>。「心不全 ➔ 転倒」と一足飛びにせず、間の変化を一歩ずつ置きます。<br>「情報の名前」に<b>心機能の低下</b>、「主観」に<b>少し歩くだけで息が切れる</b>、「客観」に<b>心エコーで駆出率35%</b>と入力してください。',
