@@ -9,7 +9,7 @@
   :root{
     --paper:#f7f5ef; --panel:#fbfaf6; --card:#ffffff; --ink:#23201b; --ink-soft:#6b6459;
     --rule:#d8d2c4; --rule-soft:#e7e2d6;
-    --patient:#3d4a70; --info:#2f7d8c; --speech:#2f6f9f; --data:#3f8a5c; --diag:#3a362f; --care:#7b5aa6;
+    --patient:#3d4a70; --info:#2f7d8c; --speech:#2f6f9f; --data:#3f8a5c; --diag:#3a362f; --care:#7b5aa6; --goal:#a8741a; --strength:#4f7d2b;
     --edge:#5a5449; --warn:#9a3b34; --warn-bg:#f6e6e3; --fix:#8a8172; --accent:#c15a2e;
   }
   *{box-sizing:border-box}
@@ -150,10 +150,11 @@
 /* ============================================================
    定義
    ============================================================ */
-const NTYPE={patient:['患者情報','--patient'],info:['情報','--info'],speech:['発話','--speech'],data:['客観データ','--data'],diagnosis:['看護診断','--diag'],care:['看護ケア','--care']};
+const NTYPE={patient:['患者情報','--patient'],info:['情報','--info'],speech:['発話','--speech'],data:['客観データ','--data'],diagnosis:['看護診断','--diag'],care:['看護ケア','--care'],goal:['目標','--goal'],strength:['強み・資源','--strength']};
 const BLOCK={source_is_diagnosis:'看護診断から矢印を出そうとした',target_is_patient:'患者情報へ矢印を入れようとした',
   target_is_care:'原因 ➔ 看護ケア の向きで結ぼうとした',care_to_non_info:'看護ケアを原因・症状以外へ結ぼうとした',
-  no_patient:'患者情報より先に他の情報を置こうとした'};
+  no_patient:'患者情報より先に他の情報を置こうとした',source_is_goal:'目標から矢印を出そうとした',
+  target_is_strength:'強み・資源へ矢印を入れようとした',strength_to_non_goal:'強み・資源を目標以外へ結ぼうとした'};
 const blockLabel=r=>BLOCK[r]||('作法の通知（'+r+'）');
 // 操作の分類（タイムラインの段と色）
 const CAT={node:{label:'情報を置く',color:'#2f7d8c',row:0},edge:{label:'線を引く',color:'#5a5449',row:1},
@@ -326,7 +327,7 @@ function describe(a,e){
   const N=id=>esc(nodeName(a,id));
   const edgeParts=id=>{ const m=/^e_(.+?)_(n\d+)$/.exec(id||''); return m?N(m[1])+' ➔ '+N(m[2]):esc(id); };
   switch(e.action){
-    case 'add_node': return ['情報を置く',e.type==='patient'?`<b>${N(e.id)}</b>`:`<b>${esc(typeName(e.type))}${e.carekind?'（'+esc(e.carekind)+'）':''}</b>：${N(e.id)}${e.supp?`（根拠データ${e.supp}件）`:''}`];
+    case 'add_node': return ['情報を置く',e.type==='patient'?`<b>${N(e.id)}</b>`:`<b>${esc(typeName(e.type))}${e.carekind?'（'+esc(e.carekind)+'）':''}${e.stype?'（'+esc({self:'本人',family:'家族',env:'環境',service:'サービス'}[e.stype]||e.stype)+'）':''}</b>：${N(e.id)}${e.supp?`（根拠データ${e.supp}件）`:''}`];
     case 'add_supp': return ['根拠データを追加',`${N(e.id)}（${e.kind==='subj'?'主観':e.kind==='obj'?'客観':esc(e.kind||'')}）`];
     case 'delete_supp': return ['根拠データを削除',N(e.id)];
     case 'add_edge': return ['線を引く',`${N(e.source)} ➔ ${N(e.target)}${e.potential?'（点線）':''}`];
@@ -336,6 +337,7 @@ function describe(a,e){
     case 'delete_edge': return ['線を削除',edgeParts(e.id)];
     case 'toggle_edge': return ['実線／点線の切替',edgeParts(e.id)];
     case 'reorder_diagnosis': return ['診断の並べ替え',(e.order||[]).map((id,i)=>'#'+(i+1)+' '+N(id)).join('、')];
+    case 'goal_edge_kind': return ['支える/脅かす の自動判定',`${edgeParts(e.id)} を <b>${e.kind==='support'?'支える':e.kind==='threaten'?'脅かす':esc(e.kind)}</b> と判定`];
     case 'pes_role': return ['E/S の自動判定',`${edgeParts(e.id)} を <b>${esc(e.pes)}</b> と判定`];
     case 'phase_click': return ['画面の切替',esc({input:'① 情報入力',link:'② つながりの吟味',reflect:'③ 課題の導出'}[e.phase]||e.phase)];
     case 'open_review': return ['ふりかえりを開く',''];
@@ -381,7 +383,7 @@ function renderMini(a){
   const svg=document.getElementById('mini'); const nodes=(a.d.nodes||[]).filter(n=>n&&n.data&&n.position);
   if(!nodes.length){ svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#6b6459" font-size="13">図がありません</text>'; svg.removeAttribute('viewBox'); return; }
   const BH=34, pos={}, lab={}, bw={};
-  const labelOf=n=>{ const t=n.data.ntype; let s=t==='patient'?('患者 '+(n.data.pname||'')):((t==='care'?(n.data.carekind||'')+': ':'')+(n.data.base||'')); return s.length>14?s.slice(0,13)+'…':s; };
+  const labelOf=n=>{ const t=n.data.ntype; let s=t==='patient'?('患者 '+(n.data.pname||'')):((t==='care'?(n.data.carekind||'')+': ':t==='goal'?'◎':'')+(n.data.base||'')); return s.length>14?s.slice(0,13)+'…':s; };
   let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
   nodes.forEach(n=>{ const p=n.position, id=n.data.id; pos[id]=p; lab[id]=labelOf(n);
     bw[id]=Math.max(56,[...lab[id]].reduce((w,c)=>w+(/[ -~]/.test(c)?7:12.5),0)+20);
@@ -394,7 +396,7 @@ function renderMini(a){
     const st=clip(q,p,bw[e.data.source]), en=clip(p,q,bw[e.data.target]);
     s+=`<line x1="${st.x}" y1="${st.y}" x2="${en.x}" y2="${en.y}" stroke="${css('--edge')}" stroke-width="1.6" ${e.potential?'stroke-dasharray="5 4"':''} marker-end="url(#ah)"/>`; });
   nodes.forEach(n=>{ const p=n.position, t=n.data.ntype, id=n.data.id, w=bw[id], col=css((NTYPE[t]||NTYPE.info)[1]);
-    s+=`<g><title>${esc(typeName(t))}：${esc(n.data.base||n.data.pname||'')}</title><rect x="${p.x-w/2}" y="${p.y-BH/2}" width="${w}" height="${BH}" rx="7" fill="#fff" stroke="${col}" stroke-width="${t==='diagnosis'?3:1.8}"/>`
+    s+=`<g><title>${esc(typeName(t))}：${esc(n.data.base||n.data.pname||'')}</title><rect x="${p.x-w/2}" y="${p.y-BH/2}" width="${w}" height="${BH}" rx="7" fill="#fff" stroke="${col}" stroke-width="${t==='diagnosis'||t==='goal'?3:1.8}"/>`
        +`<text x="${p.x}" y="${p.y+4.5}" text-anchor="middle" font-size="12" fill="#23201b">${esc(lab[id])}</text></g>`; });
   svg.innerHTML=s;
 }
