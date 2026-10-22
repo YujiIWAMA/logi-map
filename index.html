@@ -15,6 +15,9 @@
     --info:#2f7d8c;    --info-bg:#e3f0f1;       /* 情報: 現象・症状・原因など（主観/客観データ付き） */
     --diag:#3a362f;    --diag-bg:#efece3;       /* 看護診断: 結論 */
     --care:#7b5aa6;    --care-bg:#efe9f7;       /* 看護ケア: OP/TP/EP */
+    --goal:#a8741a;    --goal-bg:#fbf1dc;       /* 目標: 本人が目指す暮らし */
+    --strength:#4f7d2b; --strength-bg:#e9f2df;  /* 強み・資源 */
+    --support:#4f7d2b; --threat:#b23a48;       /* 支える / 脅かす 矢印 */
     --accent:#9a3b34;  --proposed:#9b8cc4; --edge:#5a5449;
     --pes-e:#c15a2e;   --pes-s:#2e8b8b;   /* E=原因・関連因子 / S=症状・根拠データ */
     --shadow:0 1px 2px rgba(35,32,27,.08),0 8px 24px rgba(35,32,27,.06);
@@ -62,6 +65,10 @@
   .seg button[data-t="data"] .dot{background:var(--data)}
   .seg button[data-t="diagnosis"] .dot{background:var(--diag-bg);border:3px double var(--diag);border-radius:2px}
   .seg button[data-t="care"] .dot{background:var(--care);border-radius:2px}
+  .seg button[data-t="goal"] .dot{background:var(--goal);border-radius:50%;box-shadow:0 0 0 2px var(--goal-bg)}
+  .seg button[data-t="strength"] .dot{background:var(--strength);border-radius:2px}
+  .stseg button b{color:var(--strength)!important;font-size:12px!important}
+  .stseg button.on{border-color:var(--strength)!important}
   .seg button.on{border-color:var(--ink);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
   /* OP/TP/EP 選択 */
   .careseg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
@@ -320,6 +327,8 @@
       <button data-t="info"><span class="dot"></span>情報（症状・原因など）</button>
       <button data-t="diagnosis"><span class="dot"></span>看護診断</button>
       <button data-t="care"><span class="dot"></span>看護ケア</button>
+      <button data-t="goal"><span class="dot"></span>目標</button>
+      <button data-t="strength"><span class="dot"></span>強み・資源</button>
     </div>
 
     <div id="careInput" style="display:none">
@@ -337,9 +346,18 @@
         <div class="careseg dxseg" id="dxTypeSeg">
           <button data-x="actual" class="on"><b>実在型</b>いま起きている</button>
           <button data-x="risk"><b>リスク型</b>起こりうる</button>
-          <button data-x="goal"><b>目標指向型</b>より良い状態へ</button>
+          <button data-x="goal"><b>目標指向型</b>目指す状態へ</button>
         </div>
         <div class="hint" id="dxTypeHint" style="margin-top:4px"></div>
+      </div>
+      <div id="stInput" style="display:none">
+        <div class="supp-lab">強み・資源の区分</div>
+        <div class="careseg stseg" id="stSeg" style="grid-template-columns:1fr 1fr 1fr 1fr">
+          <button data-s="self" class="on"><b>本人</b></button>
+          <button data-s="family"><b>家族</b></button>
+          <button data-s="env"><b>環境</b></button>
+          <button data-s="service"><b>サービス</b></button>
+        </div>
       </div>
       <div id="suppInput">
         <div class="supp-lab"><span class="sk s">主観</span>患者が語ったこと・感じていること<span class="sub">例:「少し歩くだけで苦しい」</span></div>
@@ -407,6 +425,10 @@
       <span><span class="sw" style="background:var(--info)"></span>情報（主観・客観データ付き）</span>
       <span><span class="sw diag"></span>看護診断（二重枠）</span>
       <span><span class="sw" style="background:var(--care)"></span>看護ケア（OP/TP/EP）＝二重線で原因へ</span>
+      <span><span class="sw" style="background:var(--goal);border-radius:50%"></span>目標（本人が目指す暮らし）</span>
+      <span><span class="sw" style="background:var(--strength)"></span>強み・資源</span>
+      <span><svg width="26" height="10"><line x1="0" y1="5" x2="19" y2="5" stroke="#4f7d2b" stroke-width="2.5"/><polygon points="18,1 26,5 18,9" fill="#4f7d2b"/></svg><b>支える</b>（強み・資源 ➔ 目標）</span>
+      <span><svg width="26" height="10"><line x1="0" y1="5" x2="23" y2="5" stroke="#b23a48" stroke-width="2.5"/><line x1="24" y1="0" x2="24" y2="10" stroke="#b23a48" stroke-width="3"/></svg><b>脅かす</b>（危険因子 ➔ 目標）</span>
       <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span><b>E1・E2…</b> 原因・関連因子／危険因子（診断に近い順）</span>
       <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span><b>S</b> 症状・徴候（実在型の看護診断の直接の根拠）</span>
     </div>
@@ -483,6 +505,8 @@ const TYPE_META = {
   speech:    {border:'#2f6f9f', bgvar:'--speech-bg',  hint:'患者が語ったことば。主観情報として、そのまま記録します。'},
   data:      {border:'#3f8a5c', bgvar:'--data-bg',    hint:'検査値・バイタル・観察事実など。測定・観察された客観情報です。'},
   diagnosis: {border:'#3a362f', bgvar:'--diag-bg',    hint:'全体像から導いた結論。二重枠で表示され、複数あるときは優先順位（＃）をつけられます。'},
+  goal:      {border:'#a8741a', bgvar:'--goal-bg',    hint:'本人が目指す暮らし・状態を、できるだけ本人の言葉で（例：自宅で妻と暮らし続ける）。主観欄に、その望みを語った本人の発言を添えましょう。'},
+  strength:  {border:'#4f7d2b', bgvar:'--strength-bg', hint:'目標を支える強み・資源。本人・家族・環境・サービスから区分を選びます（例：〔家族〕妻の介護意欲が高い）。強み・資源 ➔ 目標 の向きでつなぐと「支える」矢印になります。'},
   care:      {border:'#7b5aa6', bgvar:'--care-bg',    hint:'原因（E）に対する看護計画。OP（観察）/TP（ケア）/EP（教育）を選び、看護ケア ➔ 原因（E）の向き（二重線）で繋ぎます。'}
 };
 const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -505,6 +529,8 @@ const CY_STYLE=[
     { selector:'node[ntype="diagnosis"]', style:{'border-style':'double','border-width':5,'padding':'15px','font-weight':'bold'}},
     { selector:'node[ntype="info"]', style:{'text-justification':'left','text-max-width':'190px'}},
     { selector:'node[ntype="care"]', style:{'shape':'round-tag','border-width':2,'padding':'11px','font-size':'12px'}},
+    { selector:'node[ntype="goal"]', style:{'border-width':4,'padding':'15px','font-weight':'bold','text-justification':'left','text-max-width':'200px'}},
+    { selector:'node[ntype="strength"]', style:{'shape':'cut-rectangle','padding':'12px','font-size':'12.5px'}},
     { selector:'node.needcare', style:{'border-color':'#9a3b34','border-width':3}},
     { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
     { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
@@ -527,6 +553,9 @@ const CY_STYLE=[
     /* 看護計画 ➔ 働きかける原因（二重線）：淡い線を、濃い縁取りで挟んで二重線に見せる */
     { selector:'edge[kind="care"]', style:{'width':4,'line-color':'#f4f0fa','line-outline-width':2,'line-outline-color':'#7b5aa6',
         'target-arrow-color':'#7b5aa6','target-arrow-shape':'triangle','arrow-scale':1.2}},
+    /* 目標へ向かう矢印：支える＝緑・三角／脅かす＝赤・先端が横棒（色と矢じりの形の両方で区別） */
+    { selector:'edge[kind="support"]', style:{'line-color':'#4f7d2b','target-arrow-color':'#4f7d2b','target-arrow-shape':'triangle','width':2.5}},
+    { selector:'edge[kind="threaten"]', style:{'line-color':'#b23a48','target-arrow-color':'#b23a48','target-arrow-shape':'tee','arrow-scale':1.5,'width':2.5}},
     { selector:'edge.potential', style:{'line-style':'dashed'}},
     { selector:'edge:selected', style:{'line-color':'#23201b','target-arrow-color':'#23201b','width':3}}
 ];
@@ -627,6 +656,13 @@ cy.on('cxttap','edge',evt=>{
   const e=evt.target, oe=evt.originalEvent; evt.preventDefault&&evt.preventDefault();
   ctx.innerHTML='';
   const role=e.data('pes');
+  const gk=e.data('kind');
+  if(gk==='support'||gk==='threaten'){
+    const gi=document.createElement('div');
+    gi.style.cssText='font-size:11px;padding:6px 12px 4px;line-height:1.5;color:'+(gk==='support'?'#4f7d2b':'#b23a48');
+    gi.innerHTML=(gk==='support'?'この矢印は <b>支える</b>（強み・資源 ➔ 目標）':'この矢印は <b>脅かす</b>（危険因子 ➔ 目標）')+'<br><span style="color:var(--ink-soft)">※つなぐ元の種類から自動判定</span>';
+    ctx.appendChild(gi); ctx.appendChild(sep());
+  }
   if(role){   // 看護診断連鎖上の矢印: 現在の役割を表示（自動判定）
     const info=document.createElement('div');
     info.style.cssText='font-size:11px;padding:6px 12px 4px;line-height:1.5;color:'+(role==='E'?'#c15a2e':'#2e8b8b');
@@ -643,7 +679,7 @@ cy.on('cxttap','node',evt=>{
   const n=evt.target, oe=evt.originalEvent;
   ctx.innerHTML='';
   if(tutActive) return;
-  if(isInfoNode(n)){
+  if(isInfoNode(n)||n.data('ntype')==='goal'){
     ctx.appendChild(mkbtn('根拠データ（主観・客観）を追加・編集…',()=>{ hideCtx(); openSupp(n.id()); }));
     ctx.appendChild(sep());
   }
@@ -667,7 +703,7 @@ cy.on('cxttap',evt=>{ if(evt.target===cy) hideCtx(); });
 
 /* ---- 型セグメント（患者情報・看護ケアは専用フォームに切替）---- */
 let careKind='OP';
-const NODETEXT_PH={info:'情報の名前（例: 呼吸苦）',diagnosis:'看護診断名（例: 非効果的呼吸パターン）'};
+const NODETEXT_PH={info:'情報の名前（例: 呼吸苦）',diagnosis:'看護診断名（例: 非効果的呼吸パターン）',goal:'目標（例: 自宅で妻と暮らし続ける）',strength:'強み・資源（例: 妻の介護意欲が高い）'};
 function selectType(t){
   document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
   currentType=t;
@@ -676,7 +712,8 @@ function selectType(t){
   document.getElementById('patientInput').style.display=pt?'block':'none';
   document.getElementById('careInput').style.display=ca?'block':'none';
   document.getElementById('singleInput').style.display=(pt||ca)?'none':'block';
-  document.getElementById('suppInput').style.display=inf?'block':'none';
+  document.getElementById('suppInput').style.display=(inf||t==='goal')?'block':'none';
+  document.getElementById('stInput').style.display=t==='strength'?'block':'none';
   document.getElementById('dxTypeInput').style.display=t==='diagnosis'?'block':'none';
   if(NODETEXT_PH[t]) document.getElementById('nodeText').placeholder=NODETEXT_PH[t];
 }
@@ -698,8 +735,18 @@ function syncPatientLock(){
 const DX_TYPES={
   actual:{name:'実在型',   hint:'いま起きている問題。看護診断に直接つながる情報は <b>S（症状・徴候）</b>になります。'},
   risk:  {name:'リスク型', hint:'まだ起きていないが起こりうる問題。看護診断に直接つながる情報は S ではなく <b>E（危険因子）</b>になります。'},
-  goal:  {name:'目標指向型',hint:'より良い状態をめざす診断。看護診断に直接つながる情報は S ではなく <b>E（関連因子）</b>になります。'}
+  goal:  {name:'目標指向型',hint:'本人が目指す状態に向けた診断。看護診断に直接つながる情報は S ではなく <b>E（関連因子）</b>になります。'}
 };
+/* 強み・資源の区分と、目標・強みノードの表示文字 */
+const ST_TYPES={self:'本人',family:'家族',env:'環境',service:'サービス'};
+let stType='self';
+document.getElementById('stSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  stType=b.dataset.s; document.querySelectorAll('#stSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('nodeText').focus();
+});
+function goalLabelText(base,supp){ return wrapJa(['◎ 目標：'+base, ...(supp||[]).map(x=>(x.k==='subj'?'本人：':'客観：')+x.t)].join('\n')); }
+function strengthLabelText(base,st){ return wrapJa('〔'+(ST_TYPES[st]||'本人')+'〕'+base); }
 let dxType='actual';
 const dxTypeOf=n=>DX_TYPES[n.data('dxtype')]?n.data('dxtype'):'actual';
 function setDxSeg(t){ dxType=t; document.querySelectorAll('#dxTypeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.x===t)); document.getElementById('dxTypeHint').innerHTML=DX_TYPES[t].hint; }
@@ -742,13 +789,17 @@ function addNode(type,payload,opts){
     label=wrapJa(payload.carekind+': '+payload.text);   // OP:/TP:/EP: を頭に付与
   }else if(type==='diagnosis'){
     base=payload.text; label=payload.text; extra={dxtype:DX_TYPES[payload.dxtype]?payload.dxtype:'actual'};
+  }else if(type==='goal'){
+    base=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))}; label=goalLabelText(base,extra.supp);
+  }else if(type==='strength'){
+    base=payload.text; extra={stype:ST_TYPES[payload.stype]?payload.stype:'self'}; label=strengthLabelText(base,extra.stype);
   }else if(type==='info'){
     base=payload.text; label=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))};
   }else{ base=payload.text; label=payload.text; }
   const pos=(opts&&opts.pos)||{x:120+Math.random()*260,y:90+Math.random()*240};
   cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},position:pos});
   if(type==='diagnosis'){ diagnosisOrder.push(id); relabelDiagnoses(); renderDiagnoses(); }
-  log('add_node',{id,type,carekind:extra.carekind,supp:extra.supp?extra.supp.length:undefined}); refresh();
+  log('add_node',{id,type,carekind:extra.carekind,stype:extra.stype,supp:extra.supp?extra.supp.length:undefined}); refresh();
   coachEvent('node_added',{id,type});
   return id;
 }
@@ -771,11 +822,14 @@ document.getElementById('addNode').addEventListener('click',()=>{
   }else if(currentType==='care'){
     const ta=document.getElementById('careText'); const v=ta.value.trim(); if(!v) return;
     addNode('care',{text:v,carekind:careKind}); ta.value=''; ta.focus();
-  }else if(currentType==='info'){
+  }else if(currentType==='strength'){
+    const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
+    addNode('strength',{text:v,stype:stType}); ta.value=''; ta.focus();
+  }else if(currentType==='info'||currentType==='goal'){
     const ta=document.getElementById('nodeText'), sj=document.getElementById('subjText'), ob=document.getElementById('objText');
     const v=ta.value.trim(); if(!v) return;
     const supp=[]; if(sj.value.trim()) supp.push({k:'subj',t:sj.value.trim()}); if(ob.value.trim()) supp.push({k:'obj',t:ob.value.trim()});
-    addNode('info',{text:v,supp}); ta.value=sj.value=ob.value=''; ta.focus();
+    addNode(currentType,{text:v,supp}); ta.value=sj.value=ob.value=''; ta.focus();
   }else{
     const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
     addNode(currentType,{text:v,dxtype:dxType}); ta.value=''; ta.focus();
@@ -837,7 +891,11 @@ const KATA={
   toCare:`<span class="lead"><b>【関連図の作法】</b></span>看護計画（OP/TP/EP）は、原因に「働きかける」ものです。原因から看護ケアへ矢印を引くのではなく、<b>看護ケア ➔ 働きかける原因</b>の向き（二重線）で結びましょう。`,
   careTarget:`<span class="lead"><b>【関連図の作法】</b></span>看護ケアの矢印は、働きかける<b>原因（E）や症状（S）</b>へ向けます。患者情報・看護診断・他の看護ケアへは結びません。`,
   noPatient:`<span class="lead"><b>【関連図の作法】</b></span>関連図は<b>患者</b>を起点に描きます。まず「患者情報」（氏名・年齢・病名）を置いてから、情報・看護診断・看護ケアを置きましょう。`,
-  toPatient:`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`
+  toPatient:`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`,
+  dxToGoal:`<span class="lead"><b>【関連図の作法】</b></span>看護診断から矢印は出しません。リスクが目標を脅かすことは、<b>危険因子（E）➔ 目標</b>の向きで、危険因子から直接つないで表します。`,
+  fromGoal:`<span class="lead"><b>【関連図の作法】</b></span>目標は、強み・資源に支えられ、危険因子に脅かされる「行き先」です。目標から他へ矢印は出しません。<b>強み・資源 ➔ 目標</b>、<b>危険因子 ➔ 目標</b>の向きでつなぎましょう。`,
+  toStrength:`<span class="lead"><b>【関連図の作法】</b></span>強み・資源は、目標を支える起点です。他の情報から強み・資源へ矢印は入れません（患者情報からはつなげます）。`,
+  strengthTarget:`<span class="lead"><b>【関連図の作法】</b></span>強み・資源の矢印は、<b>目標</b>へ向けます（強み・資源 ➔ 目標 ＝「支える」）。`
 };
 /* ---- エッジ（PESの作法バリデーション付き）---- */
 function addEdge(s,t,{potential=false}={}){
@@ -846,8 +904,8 @@ function addEdge(s,t,{potential=false}={}){
 
   // 作法①: 看護診断(P)から矢印を出させない（主客逆転の防止）
   if(sn.data('ntype')==='diagnosis'){
-    log('blocked_edge',{reason:'source_is_diagnosis',source:s,target:t});
-    showToast(KATA.fromDiag); coachEvent('edge_blocked',{source:s,target:t});
+    log('blocked_edge',{reason:'source_is_diagnosis',source:s,target:t,target_type:tn.data('ntype')});
+    showToast(tn.data('ntype')==='goal'?KATA.dxToGoal:KATA.fromDiag); coachEvent('edge_blocked',{source:s,target:t});
     return false;
   }
   // 作法②: 患者情報へ矢印を入れさせない（前提・起点だから）
@@ -866,6 +924,21 @@ function addEdge(s,t,{potential=false}={}){
   if(sn.data('ntype')==='care' && !isInfoNode(tn)){
     log('blocked_edge',{reason:'care_to_non_info',source:s,target:t});
     showToast(KATA.careTarget); return false;
+  }
+  // 作法⑤: 目標から矢印を出させない（目標は支えられ・脅かされる行き先）
+  if(sn.data('ntype')==='goal'){
+    log('blocked_edge',{reason:'source_is_goal',source:s,target:t});
+    showToast(KATA.fromGoal); return false;
+  }
+  // 作法⑥: 強み・資源へは患者情報からのみ（強み・資源は支える起点）
+  if(tn.data('ntype')==='strength' && sn.data('ntype')!=='patient'){
+    log('blocked_edge',{reason:'target_is_strength',source:s,target:t});
+    showToast(KATA.toStrength); return false;
+  }
+  // 作法⑦: 強み・資源の矢印は目標へ
+  if(sn.data('ntype')==='strength' && tn.data('ntype')!=='goal'){
+    log('blocked_edge',{reason:'strength_to_non_goal',source:s,target:t});
+    showToast(KATA.strengthTarget); return false;
   }
 
   if(cy.edges(`[source="${s}"][target="${t}"]`).length) return false;
@@ -978,7 +1051,9 @@ function updatePES(c,quiet){
   const info=analyzePES(c);
   // エッジの E/S ラベル（看護ケアから出る線は kind=care：二重線で表示）
   c.edges().forEach(e=>{
-    if(e.source().data('ntype')==='care'){ if(e.data('kind')!=='care') e.data('kind','care'); }
+    const sT=e.source().data('ntype'), tT=e.target().data('ntype');
+    const k = sT==='care' ? 'care' : tT==='goal' ? (sT==='strength' ? 'support' : isInfoNode(e.source()) ? 'threaten' : undefined) : undefined;
+    if(k){ if(e.data('kind')!==k){ e.data('kind',k); if(!quiet&&k!=='care') log('goal_edge_kind',{id:e.id(),kind:k}); } }
     else if(e.data('kind')!==undefined) e.removeData('kind');
     const r=pesRole(e,info);
     if(r){
@@ -990,6 +1065,7 @@ function updatePES(c,quiet){
   // ノード頭に S:/E1:/E2: タグを付与（speech/data のみ）＋ 介入点のない連鎖の起点を強調
   c.nodes().removeClass('needcare');
   c.nodes().forEach(n=>{
+    if(n.data('ntype')==='goal'){ const g=goalLabelText(n.data('base'),n.data('supp')); if(n.data('label')!==g) n.data('label',g); return; }
     if(!isInfoNode(n)) return;
     const r=info[n.id()];
     const want = infoLabelText(n, r ? pesTagOf(r.role,r.level) : '');
@@ -1154,8 +1230,8 @@ function buildReview(){
   // 3 作法のつまずき
   let s3,d3;
   if(blocks.length+addBlocks.length===0){ s3='つまずきなし'; d3='PESの向き（E→S→P、患者情報は起点）の作法に反する操作はありませんでした。'; }
-  else { const bySrc=blocks.filter(b=>b.reason==='source_is_diagnosis').length, byTgt=blocks.filter(b=>b.reason==='target_is_patient').length, byCare=blocks.filter(b=>b.reason==='target_is_care'||b.reason==='care_to_non_info').length;
-    const parts=[]; if(bySrc)parts.push(`看護診断から矢印を出そうとした操作が${bySrc}回`); if(byTgt)parts.push(`患者情報へ矢印を入れようとした操作が${byTgt}回`); if(byCare)parts.push(`看護ケアの向き（看護ケア ➔ 原因）に反する操作が${byCare}回`); if(addBlocks.length)parts.push(`患者情報より先に他の情報を置こうとした操作が${addBlocks.length}回`);
+  else { const bySrc=blocks.filter(b=>b.reason==='source_is_diagnosis').length, byTgt=blocks.filter(b=>b.reason==='target_is_patient').length, byCare=blocks.filter(b=>b.reason==='target_is_care'||b.reason==='care_to_non_info').length, byGoal=blocks.filter(b=>b.reason==='source_is_goal'||b.reason==='target_is_strength'||b.reason==='strength_to_non_goal').length;
+    const parts=[]; if(bySrc)parts.push(`看護診断から矢印を出そうとした操作が${bySrc}回`); if(byTgt)parts.push(`患者情報へ矢印を入れようとした操作が${byTgt}回`); if(byCare)parts.push(`看護ケアの向き（看護ケア ➔ 原因）に反する操作が${byCare}回`); if(byGoal)parts.push(`目標・強み資源の向き（強み・資源／危険因子 ➔ 目標）に反する操作が${byGoal}回`); if(addBlocks.length)parts.push(`患者情報より先に他の情報を置こうとした操作が${addBlocks.length}回`);
     s3=`気づきの機会 ${blocks.length+addBlocks.length}回`; d3=parts.join('、')+'ありました。作法の通知を受けて向きを見直せていれば、それ自体がPES構造の学びになっています。'; }
   cards.push({cls:'stumble',k:'作法のつまずき',v:s3,d:d3});
   // 4 試行錯誤
@@ -1190,6 +1266,10 @@ function unlinkedTip(ntype){
       return '➔ この診断を下した根拠となる「データ（S）」や「原因（E）」がまだ結びついていません。';
     case 'patient':
       return '➔ 図の主体（前提）です。関連する現象やデータへ繋いで、全体像の起点にしましょう。';
+    case 'goal':
+      return '➔ 目標を支える「強み・資源」と、目標を脅かす「危険因子」を、それぞれ目標へ向けてつないでみましょう。';
+    case 'strength':
+      return '➔ この強み・資源は、どの目標を支えますか？ 強み・資源 ➔ 目標 の向きでつなぎましょう。';
     case 'care':
       return '➔ 看護計画（OP/TP/EP）です。働きかける原因（E）へ、看護ケア ➔ 原因 の向き（二重線）で繋ぎましょう。';
     default:
@@ -1220,7 +1300,7 @@ function refresh(){
 }
 const PHASE_GUIDE={
   input:{step:'STEP 1 ／ アセスメント', html:'まず <b>患者情報</b> を置き、続けて <b>情報（主観・客観データ付き）・看護診断（P）・看護ケア（OP/TP/EP）</b> を置きましょう。'},
-  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてクリック＝線を引く。<b>E（原因）→…→S（症状）→P（診断）</b>の向きで繋ぎ（リスク型・目標指向型の診断は <b>E→P</b>）、看護ケアは<b>看護ケア ➔ 働きかけるE</b>（二重線）。原因と症状の間の「途中の変化」を省略せず挟みましょう。'},
+  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてクリック＝線を引く。<b>E（原因）→…→S（症状）→P（診断）</b>の向きで繋ぎ（リスク型・目標指向型の診断は <b>E→P</b>）、看護ケアは<b>看護ケア ➔ 働きかけるE</b>（二重線）。原因と症状の間の「途中の変化」を省略せず挟みましょう。目標を置いたら、<b>強み・資源 ➔ 目標</b>（支える）、<b>危険因子 ➔ 目標</b>（脅かす）。'},
   reflect:{step:'STEP 3 ／ 看護診断・看護計画の点検', html:'右で <b>各Pが S（症状）に、SがE（原因の連鎖）に支えられ、介入するEに看護計画（OP/TP/EP）がある</b> かを点検し、優先順位（＃）を整えて、図を完成させましょう。'}
 };
 function setPhase(p){
@@ -1346,7 +1426,7 @@ const SAVE_VERSION=1;
 function serialize(){
   const nodes=cy.nodes().map(n=>({
     data:{ id:n.id(), base:n.data('base'), ntype:n.data('ntype'),
-      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), supp:n.data('supp'), dxtype:n.data('dxtype') },
+      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), supp:n.data('supp'), dxtype:n.data('dxtype'), stype:n.data('stype') },
     position:{ x:n.position('x'), y:n.position('y') }
   }));
   const edges=cy.edges().map(e=>({
@@ -1428,6 +1508,8 @@ function applyData(d){
     let label;
     if(n.data.ntype==='patient') label=patientLabel(n.data.pname,n.data.page,n.data.pdisease);
     else if(n.data.ntype==='care') label=wrapJa((n.data.carekind||'OP')+': '+n.data.base);
+    else if(n.data.ntype==='goal') label=goalLabelText(n.data.base,n.data.supp);
+    else if(n.data.ntype==='strength') label=strengthLabelText(n.data.base,n.data.stype);
     else label=n.data.base;
     return { group:'nodes', data:{ ...n.data, label, bg:cssVar(m.bgvar), border:m.border }, position:n.position };
   });
@@ -1558,7 +1640,7 @@ function buildPrintHTML(){
     <section class="p1">
       <div class="hd"><h1>関連図</h1><span class="meta">作成日時: ${now}</span></div>
       <div class="fig"><img src="${png}" alt="関連図"></div>
-      <div class="lg"><span>■患者情報　■情報（主観・客観データ付き）　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e"><b>E1・E2…</b> 原因・関連因子／危険因子（診断に近い順）</span><span style="color:#2e8b8b"><b>S</b> 症状・徴候（実在型の直前）</span><span style="color:#7b5aa6">二重線＝看護ケア ➔ 働きかけるE</span></div>
+      <div class="lg"><span>■患者情報　■情報（主観・客観データ付き）　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e"><b>E1・E2…</b> 原因・関連因子／危険因子（診断に近い順）</span><span style="color:#2e8b8b"><b>S</b> 症状・徴候（実在型の直前）</span><span style="color:#7b5aa6">二重線＝看護ケア ➔ 働きかけるE</span><span style="color:#4f7d2b">緑・三角＝支える（強み・資源 ➔ 目標）</span><span style="color:#b23a48">赤・先端が横棒＝脅かす（危険因子 ➔ 目標）</span></div>
     </section>
     ${lists?`<section class="p2">${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}${careList?`<h2>看護計画（OP/TP/EP）と、働きかける原因</h2><ul class="c">${careList}</ul>`:''}</section>`:''}
     </body></html>`;
