@@ -3,24 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script>
-  (function () {
-    var params = new URLSearchParams(location.search);
-    // 「PC版で見る」を選んだ人は振り分けない
-    if (params.get('view') === 'pc') {
-      try { localStorage.setItem('forcePC', '1'); } catch (e) {}
-      return;
-    }
-    var forcePC = false;
-    try { forcePC = localStorage.getItem('forcePC') === '1'; } catch (e) {}
-    // 画面が狭く、かつタッチ操作の端末をスマホとみなす
-    var isPhone = window.matchMedia('(max-width: 767px) and (pointer: coarse)').matches;
-    if (isPhone && !forcePC) {
-      location.replace('./m/');   // スマホ版（ヒント集）へ
-    }
-  })();
-</script>
-
 <title>関連図 — 全体像をつなぐ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <style>
@@ -69,8 +51,6 @@
   .seg button[data-t="info"] .dot{background:var(--info);border-radius:50%}
   .seg button.locked{opacity:.5;cursor:not-allowed}
   .seg button.flash{animation:kflash .5s 2}
-  .seg button.waiting{opacity:.5}
-  .seg button.waiting:hover{opacity:.75}
   @keyframes kflash{50%{box-shadow:0 0 0 4px rgba(154,59,52,.45);border-color:var(--accent)}}
   .supp-lab{font-size:11.5px;color:var(--ink);margin:8px 0 3px;line-height:1.5}
   .supp-lab .sk{display:inline-block;font-size:10.5px;color:#fff;border-radius:4px;padding:0 6px;margin-right:4px;font-weight:700}
@@ -88,6 +68,8 @@
   .careseg button{border:1px solid var(--rule);background:#fff;border-radius:7px;padding:7px 2px;font-size:11px;
     cursor:pointer;color:var(--ink-soft);line-height:1.35;text-align:center}
   .careseg button b{display:block;font-size:12.5px;color:var(--care)}
+  .dxseg button b{color:var(--diag)!important;font-size:12px!important}
+  .dxseg button.on{border-color:var(--diag)!important}
   .careseg button.on{border-color:var(--care);color:var(--ink);box-shadow:var(--shadow);font-weight:700}
   textarea,input[type=text]{width:100%;border:1px solid var(--rule);border-radius:7px;padding:9px 10px;
     font:inherit;font-size:13px;background:#fff;resize:vertical;color:var(--ink);}
@@ -171,6 +153,7 @@
   /* 自動保存の状態表示 */
   .astate{align-self:center;font-size:11px;color:var(--ink-soft);background:#ffffffdd;backdrop-filter:blur(4px);
     border:1px solid var(--rule);border-radius:6px;padding:5px 9px;margin-right:2px;max-width:320px;line-height:1.4}
+  #fileState{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .astate.warn{color:var(--accent);border-color:#e3c4c0}
 
   /* 途中保存の再開バナー（空のキャンバス中央に出す） */
@@ -349,6 +332,15 @@
     </div>
     <div id="singleInput" style="display:none">
       <textarea id="nodeText" rows="2" placeholder="情報の名前（例: 呼吸苦）"></textarea>
+      <div id="dxTypeInput" style="display:none">
+        <div class="supp-lab">看護診断の型</div>
+        <div class="careseg dxseg" id="dxTypeSeg">
+          <button data-x="actual" class="on"><b>実在型</b>いま起きている</button>
+          <button data-x="risk"><b>リスク型</b>起こりうる</button>
+          <button data-x="goal"><b>目標指向型</b>より良い状態へ</button>
+        </div>
+        <div class="hint" id="dxTypeHint" style="margin-top:4px"></div>
+      </div>
       <div id="suppInput">
         <div class="supp-lab"><span class="sk s">主観</span>患者が語ったこと・感じていること<span class="sub">例:「少し歩くだけで苦しい」</span></div>
         <textarea id="subjText" rows="2" placeholder="なければ空欄"></textarea>
@@ -386,10 +378,11 @@
       <div id="phaseGuide"></div>
       <div class="toolbar">
         <span class="astate" id="autosaveState">自動保存：準備中</span>
+        <span class="astate" id="fileState" style="display:none"></span>
         <button id="saveBtn" class="print">💾 保存</button>
+        <button id="saveAsBtn" style="display:none" title="別のファイルとして保存します">別名で保存</button>
         <button id="openBtn">📁 開く</button>
         <button id="fitBtn">全体表示</button>
-        <button id="relayoutBtn">再配置</button>
         <button id="reviewBtn" class="print">🔎 ふりかえる</button>
         <button id="printBtn" class="print">🖶 印刷 / PDF</button>
       </div>
@@ -414,8 +407,8 @@
       <span><span class="sw" style="background:var(--info)"></span>情報（主観・客観データ付き）</span>
       <span><span class="sw diag"></span>看護診断（二重枠）</span>
       <span><span class="sw" style="background:var(--care)"></span>看護ケア（OP/TP/EP）＝二重線で原因へ</span>
-      <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>原因（E）から結果への矢印</span>
-      <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span>症状・徴候（S）から看護診断への矢印</span>
+      <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span><b>E1・E2…</b> 原因・関連因子／危険因子（診断に近い順）</span>
+      <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span><b>S</b> 症状・徴候（実在型の看護診断の直接の根拠）</span>
     </div>
   </section>
 
@@ -518,12 +511,17 @@ const CY_STYLE=[
     { selector:'node.hl', style:{'underlay-color':'#e8a33d','underlay-opacity':.4,'underlay-padding':8,'underlay-shape':'round-rectangle','border-color':'#e8a33d','border-width':3}},
     { selector:'node.hl.hlb', style:{'underlay-opacity':.25,'underlay-padding':12}},
     { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
-    /* 直交ルーティング：経路は ORouter が計算し、折れ点を segments で与える（下の taxi は計算前の仮表示） */
+    /* 縦横だけの折れ線（直交）。折れ点は routeEdgesOf() が計算する */
     { selector:'edge', style:{
         'width':2,'line-color':'#5a5449','target-arrow-color':'#5a5449','target-arrow-shape':'triangle','arrow-scale':1.1,
-        'curve-style':'taxi','taxi-turn':'40%','taxi-turn-min-distance':'8px',
-        'source-endpoint':'outside-to-node','target-endpoint':'outside-to-node','edge-distances':'node-position'}},
-    /* 看護診断(P)につながる連鎖の矢印は色分けのみ（文字は付けない。意味は凡例で示す）。E=原因から出る矢印 / S=症状・徴候から診断へ */
+        'curve-style':'segments','edge-distances':'node-position','segment-weights':'0.5','segment-distances':'0',
+        'source-endpoint':'outside-to-node','target-endpoint':'outside-to-node'}},
+    /* 看護診断(P)へ入る矢印だけラベル+色分け。E=原因・関連因子 / S=症状・根拠データ */
+    { selector:'edge[pes]', style:{
+        'label':'data(pesLabel)','font-size':'11px','font-weight':'bold',
+        'font-family':'Hiragino Kaku Gothic ProN, sans-serif',
+        'text-background-color':'#f7f5ef','text-background-opacity':1,'text-background-padding':'2px',
+        'text-rotation':'none'}},
     { selector:'edge[pes="E"]', style:{'line-color':'#c15a2e','target-arrow-color':'#c15a2e','color':'#c15a2e','width':2.5}},
     { selector:'edge[pes="S"]', style:{'line-color':'#2e8b8b','target-arrow-color':'#2e8b8b','color':'#2e8b8b','width':2.5}},
     /* 看護計画 ➔ 働きかける原因（二重線）：淡い線を、濃い縁取りで挟んで二重線に見せる */
@@ -539,322 +537,63 @@ const cy = cytoscape({
 });
 
 /* ============================================================
-   直交ルーティング（ORouter）
-   ・矢印は縦横のみ。ノードを避け、曲がり・交差・他の線との重なりが少ない経路を選ぶ
-   ・同じ辺から出入りする線は、曲がる方向に合わせて辺に沿って散らす（線どうしが絡まないように）
-   ・計算した折れ点は Cytoscape の segments で描く（クリック・右クリック・点線・二重線はそのまま）
-   ・交差する所は、重ねた SVG に「ジャンプ（半円の橋）」で示す。印刷画像にも同じ印を描く
-   ・ノードの配置は動かさない（学生がどこに何を置いたかは、思考の表れなので）
+   始点分散: 同じノードから出る複数の線を、縁に沿って散らし、
+   進行方向の側から出す（どこから出た線か分かるように）
    ============================================================ */
-const ORouter=(()=>{
-  const M=16;          // ノードとの間隔（px）。最後の区間はこの長さで辺に垂直に入る
-  const BEND=40;       // 曲がり1回のコスト
-  const CROSS=160;     // 交差1か所のコスト
-  const OVERLAP=6;     // 他の線と重なって走る長さ1pxあたりのコスト
-  const SOFT=3;        // ノードのすぐ近く（間隔の内側）を通る長さ1pxあたりのコスト
-  const HOP_R=6;       // ジャンプの半径
-  const DX=[1,0,-1,0], DY=[0,1,0,-1];   // 方向 0:右 1:下 2:左 3:上（＝その向きに外を向く辺）
-  const AXIS=d=>d&1;                       // 0:横 1:縦
-  const NS='http://www.w3.org/2000/svg';
-
-  const boxOf=n=>{ const p=n.position(), w=n.outerWidth(), h=n.outerHeight();
-    return {id:n.id(),cx:p.x,cy:p.y,x1:p.x-w/2,x2:p.x+w/2,y1:p.y-h/2,y2:p.y+h/2,w,h}; };
-  const port=(b,s,off)=> s===0?{x:b.x2,y:b.cy+off} : s===2?{x:b.x1,y:b.cy+off} : s===1?{x:b.cx+off,y:b.y2} : {x:b.cx+off,y:b.y1};
-  const stubOf=(p,s)=>({x:p.x+DX[s]*M, y:p.y+DY[s]*M});
-
-  function uniq(a){ a.sort((p,q)=>p-q); const o=[]; for(const v of a){ if(!o.length||v-o[o.length-1]>0.75) o.push(v); } return o; }
-  function withMid(a){ const o=[a[0]]; for(let i=1;i<a.length;i++){ if(a[i]-a[i-1]>4*M) o.push((a[i]+a[i-1])/2); o.push(a[i]); } return o; }
-  function lb(a,v){ let lo=0,hi=a.length; while(lo<hi){ const m=(lo+hi)>>1; if(a[m]<v) lo=m+1; else hi=m; } return lo; }
-  function nearest(a,v){ const i=lb(a,v); if(i===0) return 0; if(i>=a.length) return a.length-1; return (v-a[i-1]<=a[i]-v)?i-1:i; }
-  const idxAt=(g,p)=>nearest(g.ys,p.y)*g.nx+nearest(g.xs,p.x);
-  const ptOf=(g,i)=>({x:g.xs[i%g.nx], y:g.ys[(i/g.nx)|0]});
-
-  /* 経路の候補点（格子）：ノードの縁から間隔Mの線・中心線・出入口の線と、その中間 */
-  function buildGrid(boxes,ex,ey){
-    let xs=[...ex], ys=[...ey], minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-    boxes.forEach(b=>{ xs.push(b.x1-M,b.cx,b.x2+M); ys.push(b.y1-M,b.cy,b.y2+M);
-      minX=Math.min(minX,b.x1); maxX=Math.max(maxX,b.x2); minY=Math.min(minY,b.y1); maxY=Math.max(maxY,b.y2); });
-    xs.push(minX-4*M,maxX+4*M); ys.push(minY-4*M,maxY+4*M);
-    xs=withMid(uniq(xs)); ys=withMid(uniq(ys));
-    const nx=xs.length, ny=ys.length, N=nx*ny, hard=new Uint8Array(N), soft=new Uint8Array(N);
-    const mark=(x1,x2,y1,y2,arr)=>{ for(let i=lb(xs,x1);i<nx&&xs[i]<x2;i++) for(let j=lb(ys,y1);j<ny&&ys[j]<y2;j++) arr[j*nx+i]=1; };
-    boxes.forEach(b=>{ mark(b.x1+0.5,b.x2-0.5,b.y1+0.5,b.y2-0.5,hard);              // ノードの中は通れない
-                       mark(b.x1-M+0.5,b.x2+M-0.5,b.y1-M+0.5,b.y2+M-0.5,soft); });  // すぐ近くは通りにくい
-    return {xs,ys,nx,ny,N,hard,soft};
-  }
-  /* 使用状況：EH/EV=隣の点への区間を何本の線が使っているか、H/V=その点を横/縦に通る線の本数 */
-  const newOcc=N=>({EH:new Uint16Array(N),EV:new Uint16Array(N),H:new Uint16Array(N),V:new Uint16Array(N)});
-  function occupy(g,occ,path,sign){
-    const sh=new Set(), sv=new Set();
-    for(let k=0;k+1<path.length;k++){ const a=path[k], b=path[k+1]; if(a===b) continue; const ek=Math.min(a,b);
-      if(((a/g.nx)|0)===((b/g.nx)|0)){ occ.EH[ek]+=sign; sh.add(a); sh.add(b); } else { occ.EV[ek]+=sign; sv.add(a); sv.add(b); } }
-    sh.forEach(i=>occ.H[i]+=sign); sv.forEach(i=>occ.V[i]+=sign);
-  }
-
-  /* A*探索（状態＝格子点×進行方向）。作業用の配列は使い回す */
-  let G=null, FROM=null, STAMP=null, CLOSED=null, stamp=0;
-  function ensure(n){ if(!G||G.length<n){ G=new Float64Array(n); FROM=new Int32Array(n); STAMP=new Uint32Array(n); CLOSED=new Uint32Array(n); } }
-  function Heap(){ const f=[],s=[];
-    return { size:()=>f.length, f:0, s:0,
-      push(fv,sv){ f.push(fv); s.push(sv); let i=f.length-1;
-        while(i>0){ const p=(i-1)>>1; if(f[p]<=fv) break; f[i]=f[p]; s[i]=s[p]; i=p; } f[i]=fv; s[i]=sv; },
-      pop(){ const tf=f[0], ts=s[0], lf=f.pop(), ls=s.pop(), n=f.length;
-        if(n){ let i=0; for(;;){ const l=2*i+1, r=l+1; let m=-1, mf=lf;
-            if(l<n&&f[l]<mf){ m=l; mf=f[l]; } if(r<n&&f[r]<mf){ m=r; }
-            if(m<0) break; f[i]=f[m]; s[i]=s[m]; i=m; }
-          f[i]=lf; s[i]=ls; }
-        this.f=tf; this.s=ts; } }; }
-  const W=1.6;   // 推定コストの重み（>1で探索が速くなる。経路はわずかに遠回りになりうる）
-  function search(g,occ,starts,goals,ovScale,pad){
-    const {xs,ys,nx,ny,N,hard,soft}=g;
-    // 他のノードの中に埋もれた出入口は使えない（全域を探し回るのを防ぐ）
-    starts=starts.filter(q=>!hard[q.idx]); goals=goals.filter(q=>!hard[q.idx]);
-    if(!starts.length||!goals.length) return null;
-    ensure(N*4); stamp++;
-    // 探索範囲：始点・終点を囲む枠＋pad（見つからなければ全体で探し直す）
-    let wi0=0,wi1=nx-1,wj0=0,wj1=ny-1;
-    if(pad){ let x1=Infinity,x2=-Infinity,y1=Infinity,y2=-Infinity;
-      [...starts,...goals].forEach(q=>{ const p=ptOf(g,q.idx); x1=Math.min(x1,p.x); x2=Math.max(x2,p.x); y1=Math.min(y1,p.y); y2=Math.max(y2,p.y); });
-      wi0=lb(xs,x1-pad); wi1=Math.min(nx-1,lb(xs,x2+pad)); wj0=lb(ys,y1-pad); wj1=Math.min(ny-1,lb(ys,y2+pad)); }
-    const goalAt=new Map(); goals.forEach((q,k)=>{ (goalAt.get(q.idx)||goalAt.set(q.idx,[]).get(q.idx)).push(k); });
-    const gp=goals.map(q=>ptOf(g,q.idx));
-    const h=idx=>{ const x=xs[idx%nx], y=ys[(idx/nx)|0]; let m=Infinity; for(const p of gp){ const v=Math.abs(x-p.x)+Math.abs(y-p.y); if(v<m) m=v; } return m*W; };
-    const Hp=Heap();
-    starts.forEach((st,k)=>{ const s=st.idx*4+st.dir; if(STAMP[s]!==stamp||G[s]>st.cost){ STAMP[s]=stamp; G[s]=st.cost; FROM[s]=-1-k; Hp.push(st.cost+h(st.idx),s); } });
-    let best=Infinity, bestS=-1, bestK=-1, pops=0;
-    while(Hp.size()){
-      Hp.pop(); const f=Hp.f, s=Hp.s; if(f>=best) break; if(CLOSED[s]===stamp) continue; CLOSED[s]=stamp;
-      if(++pops>(pad?25000:80000)) break;
-      const idx=s>>2, dir=s&3, gs=G[s], gl=goalAt.get(idx);
-      if(gl) for(const k of gl){ const q=goals[k];
-        const extra=(dir===q.dir?0:(dir===((q.dir+2)&3)?2*BEND:BEND))+q.cost;
-        if(gs+extra<best){ best=gs+extra; bestS=s; bestK=k; } }
-      const i=idx%nx, j=(idx/nx)|0;
-      for(let d=0;d<4;d++){
-        if(d===((dir+2)&3)) continue;                       // 引き返さない
-        const ni=i+DX[d], nj=j+DY[d]; if(ni<wi0||nj<wj0||ni>wi1||nj>wj1) continue;
-        const nidx=nj*nx+ni; if(hard[nidx]&&!goalAt.has(nidx)) continue;
-        const len=AXIS(d)?Math.abs(ys[nj]-ys[j]):Math.abs(xs[ni]-xs[i]);
-        let c=len;
-        if(d!==dir) c+=BEND+CROSS*(AXIS(d)?occ.H[idx]:occ.V[idx]);  // ここで曲がると、他の線とT字に触れる
-        if(soft[nidx]||soft[idx]) c+=len*SOFT;
-        const ek=Math.min(idx,nidx), use=AXIS(d)?occ.EV[ek]:occ.EH[ek];
-        if(use) c+=len*OVERLAP*use*ovScale;                  // 他の線と重なって走る
-        c+=CROSS*(AXIS(d)?occ.H[nidx]:occ.V[nidx]);           // 他の線を横切る
-        const ns=nidx*4+d, ng=gs+c;
-        if(STAMP[ns]!==stamp){ STAMP[ns]=stamp; G[ns]=Infinity; }
-        if(ng<G[ns]){ G[ns]=ng; FROM[ns]=s; Hp.push(ng+h(nidx),ns); }
-      }
+/* ============================================================
+   直交ルーティング：線は必ず縦か横の線分だけで結ぶ
+   ・横に離れている2点 → 横→縦→横、縦に離れている2点 → 縦→横→縦
+   ・同じノードの同じ辺から出る複数の線は、出口を少しずつずらす（どこから出た線か分かるように）
+   ・折れ点は「両ノードの中心を結ぶ線」に対する重み・距離に変換して segments に渡す
+   ============================================================ */
+function routeEdgesOf(c){
+  const half=n=>({w:n.outerWidth()/2, h:n.outerHeight()/2});
+  // 出口の割り当て（ノード×辺ごとに並べて、ずらし量を決める）
+  const plan=new Map(), groups={};
+  c.edges().forEach(e=>{
+    const s=e.source(), t=e.target(); if(s.id()===t.id()) return;
+    const sp=s.position(), tp=t.position(), dx=tp.x-sp.x, dy=tp.y-sp.y;
+    const horiz=Math.abs(dx)>=Math.abs(dy);
+    const side=horiz?(dx>=0?'r':'l'):(dy>=0?'b':'t');
+    plan.set(e.id(),{horiz,side});
+    (groups[s.id()+'|'+side]=groups[s.id()+'|'+side]||[]).push(e);
+  });
+  Object.keys(groups).forEach(k=>{
+    const g=groups[k], side=k.split('|')[1], src=g[0].source(), hh=half(src);
+    g.sort((a,b)=> (side==='r'||side==='l') ? a.target().position('y')-b.target().position('y') : a.target().position('x')-b.target().position('x'));
+    const span=(side==='r'||side==='l') ? hh.h*1.2 : hh.w*1.2, n=g.length;
+    g.forEach((e,i)=>{ plan.get(e.id()).off = n>1 ? (i/(n-1)-0.5)*Math.min(span, 16*(n-1)) : 0; });
+  });
+  c.edges().forEach(e=>{
+    const p=plan.get(e.id()); if(!p) return;
+    const s=e.source(), t=e.target(), S=s.position(), T=t.position(), hs=half(s), ht=half(t);
+    const pts=[];
+    if(p.horiz){
+      const dir=T.x>=S.x?1:-1, y0=S.y+p.off;
+      const sx=S.x+dir*hs.w, tx=T.x-dir*ht.w;
+      const mx = (dir>0 ? tx>sx : tx<sx) ? (sx+tx)/2 : (S.x+T.x)/2;
+      pts.push({x:S.x+dir*(hs.w+3), y:y0});
+      if(Math.abs(T.y-y0)>0.5){ pts.push({x:mx,y:y0}); pts.push({x:mx,y:T.y}); }
+    }else{
+      const dir=T.y>=S.y?1:-1, x0=S.x+p.off;
+      const sy=S.y+dir*hs.h, ty=T.y-dir*ht.h;
+      const my = (dir>0 ? ty>sy : ty<sy) ? (sy+ty)/2 : (S.y+T.y)/2;
+      pts.push({x:x0, y:S.y+dir*(hs.h+3)});
+      if(Math.abs(T.x-x0)>0.5){ pts.push({x:x0,y:my}); pts.push({x:T.x,y:my}); }
     }
-    if(bestS<0) return null;
-    const path=[]; let s=bestS, startK=0;
-    for(let guard=0;guard<N*4;guard++){ path.push(s>>2); const p=FROM[s]; if(p<0){ startK=-1-p; break; } s=p; }
-    path.reverse(); api.pops+=pops;
-    return {path,start:starts[startK].side,goal:goals[bestK].side};
-  }
-
-  function find(g,occ,starts,goals,ov){ return search(g,occ,starts,goals,ov,6*M)||search(g,occ,starts,goals,ov,0); }
-  function compress(a){ const o=[]; const eq=(u,v)=>Math.abs(u-v)<0.01;
-    for(const p of a){ const L=o[o.length-1]; if(L&&eq(L.x,p.x)&&eq(L.y,p.y)) continue; o.push({x:p.x,y:p.y});
-      while(o.length>=3){ const A=o[o.length-3],B=o[o.length-2],C=o[o.length-1];
-        if((eq(A.x,B.x)&&eq(B.x,C.x))||(eq(A.y,B.y)&&eq(B.y,C.y))) o.splice(o.length-2,1); else break; } }
-    return o; }
-  // 相手のほうを向いた辺を少し優先する
-  const sideCost=(b,o,s)=> (DX[s]*(o.cx-b.cx)+DY[s]*(o.cy-b.cy))>0 ? 0 : 30;
-  // 辺の上での並び順：先に曲がる線ほど、曲がる側の端に置く（出口付近で線が交差しないように）
-  function sideKey(g,it,role,s){
-    const along=(s&1)?'x':'y', across=(s&1)?'y':'x', b=role==='s'?it.sb:it.tb, o=role==='s'?it.tb:it.sb;
-    let pts=it.p1?compress(it.p1.map(i=>ptOf(g,i))):null; if(pts&&role==='t') pts.reverse();
-    if(!pts||pts.length<2) return ((s&1)?o.cx-b.cx:o.cy-b.cy)*1e-3;
-    let k=1; while(k<pts.length&&Math.abs(pts[k][along]-pts[k-1][along])<0.5) k++;
-    if(k>=pts.length) return 0;
-    const turn=Math.sign(pts[k][along]-pts[k-1][along]), dist=Math.abs(pts[k-1][across]-pts[0][across]);
-    return turn<0 ? -1e6+dist : 1e6-dist;
-  }
-
-  /* 全ての矢印の経路を計算して適用し、[{e, pts:[始点,...,終点]}] を返す */
-  function route(c){
-    const boxes=new Map(); c.nodes().filter(n=>n.visible()).forEach(n=>boxes.set(n.id(),boxOf(n)));
-    const bl=[...boxes.values()];
-    const E=c.edges().filter(e=>e.visible()&&e.source().id()!==e.target().id()&&boxes.has(e.source().id())&&boxes.has(e.target().id()))
-      .map(e=>{ const sb=boxes.get(e.source().id()), tb=boxes.get(e.target().id());
-        return {e,sb,tb,d:Math.abs(sb.cx-tb.cx)+Math.abs(sb.cy-tb.cy)}; })
-      .sort((a,b)=>a.d-b.d||(a.e.id()<b.e.id()?-1:1));
-    if(!E.length) return [];
-    // ① どの辺から出入りするかを決める（出入口は辺の中央、4辺すべてを候補に探索）
-    let g=buildGrid(bl,[],[]), occ=newOcc(g.N);
-    E.forEach(it=>{
-      const starts=[], goals=[];
-      for(let s=0;s<4;s++){
-        starts.push({side:s,idx:idxAt(g,stubOf(port(it.sb,s,0),s)),dir:s,cost:sideCost(it.sb,it.tb,s)});
-        goals.push({side:s,idx:idxAt(g,stubOf(port(it.tb,s,0),s)),dir:(s+2)&3,cost:sideCost(it.tb,it.sb,s)});
-      }
-      const r=find(g,occ,starts,goals,0.25);
-      if(r){ it.ss=r.start; it.ts=r.goal; it.p1=r.path; occupy(g,occ,r.path,1); }
-      else { const dx=it.tb.cx-it.sb.cx, dy=it.tb.cy-it.sb.cy;
-        it.ss=Math.abs(dx)>=Math.abs(dy)?(dx>=0?0:2):(dy>=0?1:3); it.ts=(it.ss+2)&3; it.p1=null; }
-    });
-    // ② 同じ辺を使う線を、辺に沿って散らす
-    const groups=new Map(), add=(k,v)=>{ (groups.get(k)||groups.set(k,[]).get(k)).push(v); };
-    E.forEach(it=>{ add(it.sb.id+'\u0000'+it.ss,{it,role:'s',s:it.ss,b:it.sb}); add(it.tb.id+'\u0000'+it.ts,{it,role:'t',s:it.ts,b:it.tb}); });
-    groups.forEach(list=>{
-      list.forEach(o=>o.key=sideKey(g,o.it,o.role,o.s));
-      list.sort((a,b)=>a.key-b.key||(a.it.e.id()<b.it.e.id()?-1:1));
-      const L=(list[0].s&1)?list[0].b.w:list[0].b.h, span=Math.max(0,L-2*Math.min(14,L*0.2)), k=list.length;
-      const step=k>1?Math.min(span/(k-1),22):0;
-      list.forEach((o,i)=>{ const off=(i-(k-1)/2)*step; if(o.role==='s') o.it.so=off; else o.it.to=off; });
-    });
-    // 向かい合う辺どうしを1本だけで結ぶ線は、まっすぐになるよう出入口の位置をそろえる
-    E.forEach(it=>{
-      if(it.ts!==((it.ss+2)&3)) return;
-      const v=(it.ss&1)===0, A=it.sb, B=it.tb, c1=v?A.cy:A.cx, c2=v?B.cy:B.cx;
-      if((DX[it.ss]*(B.cx-A.cx)+DY[it.ss]*(B.cy-A.cy))<=0) return;     // 向かい合っていない
-      const ia=Math.min(14,(v?A.h:A.w)*0.2), ib=Math.min(14,(v?B.h:B.w)*0.2);
-      const aLo=(v?A.y1:A.x1)+ia, aHi=(v?A.y2:A.x2)-ia, bLo=(v?B.y1:B.x1)+ib, bHi=(v?B.y2:B.x2)-ib;
-      const aOne=groups.get(it.sb.id+'\u0000'+it.ss).length===1, bOne=groups.get(it.tb.id+'\u0000'+it.ts).length===1;
-      const pa=c1+it.so, pb=c2+it.to;
-      if(aOne&&bOne){ const lo=Math.max(aLo,bLo), hi=Math.min(aHi,bHi); if(lo>hi) return;
-        const m=Math.min(hi,Math.max(lo,(c1+c2)/2)); it.so=m-c1; it.to=m-c2; }
-      else if(bOne&&pa>=bLo&&pa<=bHi) it.to=pa-c2;      // 1本だけの側が、相手の位置に合わせる
-      else if(aOne&&pb>=aLo&&pb<=aHi) it.so=pb-c1;
-    });
-    // ③ 出入口を固定して経路を探索し、もう一度ずつ引き直して整える
-    const ex=[], ey=[];
-    E.forEach(it=>{ it.P=port(it.sb,it.ss,it.so); it.Q=port(it.tb,it.ts,it.to);
-      it.Ps=stubOf(it.P,it.ss); it.Qs=stubOf(it.Q,it.ts); ex.push(it.Ps.x,it.Qs.x); ey.push(it.Ps.y,it.Qs.y); });
-    g=buildGrid(bl,ex,ey); occ=newOcc(g.N);
-    const one=it=>{ const r=find(g,occ,[{side:it.ss,idx:idxAt(g,it.Ps),dir:it.ss,cost:0}],[{side:it.ts,idx:idxAt(g,it.Qs),dir:(it.ts+2)&3,cost:0}],1);
-      it.p2=r?r.path:null; if(r) occupy(g,occ,r.path,1); };
-    E.forEach(one);
-    if(!api.dragging) E.forEach(it=>{ if(it.p2) occupy(g,occ,it.p2,-1); one(it); });   // ドラッグ中は省略して軽くする
-    // ④ 折れ点に直して適用
-    const routes=[];
-    c.batch(()=>E.forEach(it=>{
-      let pts=it.p2?it.p2.map(i=>ptOf(g,i)):[it.Ps,{x:it.Qs.x,y:it.Ps.y},it.Qs];
-      if(!it.p2&&(it.ss&1)) pts=[it.Ps,{x:it.Ps.x,y:it.Qs.y},it.Qs];
-      const P={...it.P}, Q={...it.Q}, a=pts[0], z=pts[pts.length-1];
-      if(it.ss&1) P.x=a.x; else P.y=a.y;     // 出入口を格子の線にそろえる（斜めにならないように）
-      if(it.ts&1) Q.x=z.x; else Q.y=z.y;
-      const all=compress([P,...pts,Q]);
-      applyTo(it.e,it.sb,it.tb,all); routes.push({e:it.e,pts:all});
-    }));
-    return routes;
-  }
-  function applyTo(e,sb,tb,pts){
-    const P=pts[0], Q=pts[pts.length-1], mid=pts.slice(1,-1);
-    if(!mid.length) mid.push({x:(P.x+Q.x)/2,y:(P.y+Q.y)/2});   // 折れ点なしでも segments で描く（straight だと端点がずれることがある）
-    const vx=tb.cx-sb.cx, vy=tb.cy-sb.cy, L2=vx*vx+vy*vy, L=Math.sqrt(L2);
-    const st={'source-endpoint':`${P.x-sb.cx}px ${P.y-sb.cy}px`,'target-endpoint':`${Q.x-tb.cx}px ${Q.y-tb.cy}px`};
-    if(L<1){ st['curve-style']='straight'; }
-    else { const ux=vx/L, uy=vy/L;
-      st['curve-style']='segments';
-      st['segment-weights']=mid.map(p=>((p.x-sb.cx)*vx+(p.y-sb.cy)*vy)/L2);
-      st['segment-distances']=mid.map(p=>ux*(p.y-sb.cy)-uy*(p.x-sb.cx)); }
-    e.style(st);
-  }
-
-  /* ラベル（E/S）は、いちばん長い横の区間の中央に置く（ノードの下に隠れないように） */
-  /* 交差（ジャンプ）の位置も避けて、文字が収まるいちばん広い所を選ぶ */
-  function placeLabel(r,hops){
-    const e=r.e, text=e.data('pesLabel'); if(!text){ e.removeStyle('text-margin-x text-margin-y'); return; }
-    const half=String(text).length*5+6;      // 10px の文字幅から見積もった、ラベルの半分の幅
-    let want=null, wantRoom=-1, any=null, anyLen=-1;
-    for(let k=0;k+1<r.pts.length;k++){ const a=r.pts[k], b=r.pts[k+1], len=Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
-      if(len>anyLen){ anyLen=len; any={x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
-      if(Math.abs(a.y-b.y)>=0.01) continue;
-      const x1=Math.min(a.x,b.x)+18, x2=Math.max(a.x,b.x)-18; if(x2<=x1) continue;
-      const cuts=hops.filter(h=>Math.abs(h.y-a.y)<0.01&&h.x>x1-10&&h.x<x2+10).map(h=>[h.x-h.r-3,h.x+h.r+3]).sort((p,q)=>p[0]-q[0]);
-      let from=x1; const gaps=[];
-      cuts.forEach(([u,w])=>{ if(u>from) gaps.push([from,u]); from=Math.max(from,w); }); if(x2>from) gaps.push([from,x2]);
-      gaps.forEach(([u,w])=>{ const room=w-u; if(room>wantRoom){ wantRoom=room; want={x:(u+w)/2,y:a.y}; } });
-    }
-    if(!want||wantRoom<Math.min(2*half,60)) want=want&&wantRoom>=30?want:any;
-    if(!want) return;
-    e.removeStyle('text-margin-x text-margin-y');
-    const mp=e.midpoint();
-    e.style({'text-margin-x':want.x-mp.x,'text-margin-y':want.y-mp.y});
-  }
-  /* 交差の検出：横線と縦線が、どちらの端でもない所で交わる点 */
-  function findHops(routes){
-    const H=[], V=[];
-    routes.forEach((r,ri)=>{ const p=r.pts; for(let k=0;k+1<p.length;k++){ const a=p[k], b=p[k+1];
-      if(Math.abs(a.y-b.y)<0.01) H.push({ri,y:a.y,x1:Math.min(a.x,b.x),x2:Math.max(a.x,b.x)});
-      else V.push({ri,x:a.x,y1:Math.min(a.y,b.y),y2:Math.max(a.y,b.y)}); } });
-    const out=[];
-    H.forEach(h=>V.forEach(v=>{
-      if(h.ri===v.ri||!(v.x>h.x1+0.5&&v.x<h.x2-0.5&&h.y>v.y1+0.5&&h.y<v.y2-0.5)) return;
-      const rh=Math.min(HOP_R,v.x-h.x1-1,h.x2-v.x-1), rv=Math.min(HOP_R,h.y-v.y1-1,v.y2-h.y-1);
-      if(rh>=rv) out.push({x:v.x,y:h.y,r:Math.max(rh,2),o:'h',hop:h.ri,under:v.ri});   // 横線が縦線を飛び越える
-      else       out.push({x:v.x,y:h.y,r:Math.max(rv,2),o:'v',hop:v.ri,under:h.ri});
-    }));
-    return out;
-  }
-  const strokeOf=e=>({col:e.style('line-color'),w:parseFloat(e.style('width'))||2,
-    ow:parseFloat(e.style('line-outline-width'))||0,oc:e.style('line-outline-color')});
-  const stroke=(d,S,fill)=>(S.ow?`<path d="${d}" fill="none" stroke="${S.oc}" stroke-width="${S.w+2*S.ow}"/>`:'')
-                           +`<path d="${d}" fill="none" stroke="${S.col}" stroke-width="${S.w}"/>`;
-  function hopMarkup(routes,hops,bg){
-    let patch='', under='', arc='';
-    hops.forEach(hp=>{
-      const A=strokeOf(routes[hp.hop].e), B=strokeOf(routes[hp.under].e), tA=A.w+2*A.ow, r=hp.r, x=hp.x, y=hp.y;
-      if(hp.o==='h'){
-        patch+=`<rect x="${x-r-0.6}" y="${y-tA/2-1}" width="${2*r+1.2}" height="${tA+2}" fill="${bg}"/>`;
-        under+=stroke(`M${x},${y-tA/2-1.5}V${y+tA/2+1.5}`,B);
-        arc+=stroke(`M${x-r},${y}A${r},${r} 0 0 1 ${x+r},${y}`,A);
-      }else{
-        patch+=`<rect x="${x-tA/2-1}" y="${y-r-0.6}" width="${tA+2}" height="${2*r+1.2}" fill="${bg}"/>`;
-        under+=stroke(`M${x-tA/2-1.5},${y}H${x+tA/2+1.5}`,B);
-        arc+=stroke(`M${x},${y-r}A${r},${r} 0 0 1 ${x},${y+r}`,A);
-      }
-    });
-    return patch+under+arc;
-  }
-
-  /* 画面上の重ね合わせ（パン・ズームに追従） */
-  const layers=new Map();   // container -> {svg,g,routes}
-  function layerOf(c){
-    let L=layers.get(c); if(L) return L;
-    const host=c.container(); if(getComputedStyle(host).position==='static') host.style.position='relative';
-    const svg=document.createElementNS(NS,'svg');
-    svg.setAttribute('aria-hidden','true');
-    svg.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5;overflow:visible';
-    const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg);
-    L={svg,g,routes:[]}; layers.set(c,L);
-    const sync=()=>{ const p=c.pan(); g.setAttribute('transform',`translate(${p.x},${p.y}) scale(${c.zoom()})`); };
-    L.sync=sync; c.on('viewport resize',sync); sync();
-    c.on('select unselect data','edge',()=>scheduleOverlay(c));   // 色が変わったら描き直す
-    return L;
-  }
-  function drawOverlay(c){ const L=layerOf(c); L.g.innerHTML=hopMarkup(L.routes,findHops(L.routes),cssVar('--paper')||'#f7f5ef'); L.sync(); }
-  let ovRAF=false;
-  function scheduleOverlay(c){ if(ovRAF) return; ovRAF=true; requestAnimationFrame(()=>{ ovRAF=false; drawOverlay(c); }); }
-
-  function finish(routes){ const hops=findHops(routes);
-    routes.forEach((r,ri)=>placeLabel(r,hops.filter(h=>h.hop===ri||h.under===ri))); return routes; }
-  function run(c){ if(!c.container()) return; const t0=performance.now(); const L=layerOf(c); L.routes=finish(route(c)); drawOverlay(c); api.lastMs=performance.now()-t0; }
-  let raf=false;
-  function schedule(c){ if(raf) return; raf=true; requestAnimationFrame(()=>{ raf=false; run(c); }); }
-  /* 印刷用：cy.png({full:true}) の画像にぴったり重なる SVG（白地用） */
-  function printOverlay(c){
-    const L=layerOf(c); L.routes=finish(route(c)); drawOverlay(c);
-    const hops=findHops(L.routes); if(!hops.length) return '';
-    const bb=c.elements().boundingBox();
-    return `<svg viewBox="${bb.x1} ${bb.y1} ${bb.w} ${bb.h}" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:100%;height:100%">${hopMarkup(L.routes,hops,'#ffffff')}</svg>`;
-  }
-  const api={run,schedule,printOverlay,lastMs:0,pops:0,dragging:false,
-    stats:c=>{ const L=layerOf(c); return {edges:L.routes.length,hops:findHops(L.routes).length,ms:api.lastMs}; },
-    routesOf:c=>layerOf(c).routes};
-  return api;
-})();
-function spreadEndpointsOf(c){ ORouter.run(c); }
+    // 中心線 S→T に対する重み(w)と距離(d)へ変換
+    const vx=T.x-S.x, vy=T.y-S.y, L2=vx*vx+vy*vy; if(L2<1) return;
+    const L=Math.sqrt(L2), ws=[], ds=[];
+    pts.forEach(q=>{ const qx=q.x-S.x, qy=q.y-S.y; ws.push(((qx*vx+qy*vy)/L2).toFixed(4)); ds.push(((vx*qy-vy*qx)/L).toFixed(2)); });
+    e.style({'segment-weights':ws.join(' '),'segment-distances':ds.join(' ')});
+  });
+}
+function spreadEndpointsOf(c){ routeEdgesOf(c); }
 function spreadEndpoints(){ spreadEndpointsOf(cy); }
-function scheduleSpread(){ ORouter.schedule(cy); }
+let seRAF=false;
+function scheduleSpread(){ if(seRAF)return; seRAF=true; requestAnimationFrame(()=>{seRAF=false;spreadEndpoints();}); }
 cy.on('position','node',scheduleSpread);
-cy.on('add remove',scheduleSpread);        // ノードが増えると、既存の線もよけ直す
-cy.on('data','node',scheduleSpread);       // 文字が変わるとノードの大きさも変わる
 cy.on('layoutstop',spreadEndpoints);
-cy.on('grab','node',()=>{ ORouter.dragging=true; });
-cy.on('free','node',()=>{ ORouter.dragging=false; scheduleSpread(); });   // 置いたら丁寧に引き直す
 
 /* ---- 結線 / 切替 ---- */
 let linkSource=null;
@@ -908,6 +647,11 @@ cy.on('cxttap','node',evt=>{
     ctx.appendChild(mkbtn('根拠データ（主観・客観）を追加・編集…',()=>{ hideCtx(); openSupp(n.id()); }));
     ctx.appendChild(sep());
   }
+  if(n.data('ntype')==='diagnosis'){
+    const cap=document.createElement('div'); cap.style.cssText='font-size:11px;padding:6px 12px 2px;color:var(--ink-soft)'; cap.textContent='看護診断の型'; ctx.appendChild(cap);
+    Object.keys(DX_TYPES).forEach(t=>ctx.appendChild(mkbtn((dxTypeOf(n)===t?'● ':'○ ')+DX_TYPES[t].name,()=>{ changeDxType(n,t); hideCtx(); })));
+    ctx.appendChild(sep());
+  }
   const label = n.data('ntype')==='patient' ? '患者情報を削除'
               : n.data('ntype')==='diagnosis' ? '看護診断を削除' : 'ノードを削除';
   ctx.appendChild(mkbtn(label,()=>{
@@ -933,21 +677,11 @@ function selectType(t){
   document.getElementById('careInput').style.display=ca?'block':'none';
   document.getElementById('singleInput').style.display=(pt||ca)?'none':'block';
   document.getElementById('suppInput').style.display=inf?'block':'none';
+  document.getElementById('dxTypeInput').style.display=t==='diagnosis'?'block':'none';
   if(NODETEXT_PH[t]) document.getElementById('nodeText').placeholder=NODETEXT_PH[t];
-}
-/* 患者情報がないうちに情報・看護診断・看護ケアを押したとき：患者情報の入力へ促す（エラーではなく案内） */
-function promptPatientFirst(t){
-  log('blocked_add',{reason:'no_patient',type:t,via:'select'});
-  document.querySelectorAll('#toastWrap .toast[data-k="np"]').forEach(x=>x.remove());
-  showToast(KATA.patientFirst,5000);
-  const last=document.querySelector('#toastWrap .toast:last-child'); if(last) last.dataset.k='np';
-  const b=document.querySelector('#typeSeg [data-t="patient"]');
-  if(b){ b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash'); }
-  selectType('patient'); document.getElementById('pName').focus();
 }
 document.getElementById('typeSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b||b.disabled||b.classList.contains('locked')) return;
-  if(!COACH.active && b.dataset.t!=='patient' && cy.nodes('[ntype="patient"]').length===0){ promptPatientFirst(b.dataset.t); return; }
   selectType(b.dataset.t);
   (currentType==='patient'?document.getElementById('pName'):currentType==='care'?document.getElementById('careText'):document.getElementById('nodeText')).focus();
   coachEvent('type_selected',{type:currentType});
@@ -958,11 +692,27 @@ function syncPatientLock(){
   const b=document.querySelector('#typeSeg [data-t="patient"]');
   b.classList.toggle('locked',has); b.setAttribute('aria-disabled',has?'true':'false');
   b.innerHTML='<span class="dot"></span>'+(has?'患者情報（入力済み）':'患者情報');
-  document.querySelectorAll('#typeSeg button:not([data-t="patient"])').forEach(x=>x.classList.toggle('waiting',!has));
   if(has && currentType==='patient') selectType('info');
-  if(!has && currentType!=='patient') selectType('patient');   // 患者情報を消したら、患者情報の入力に戻す
 }
-syncPatientLock();   // 起動時：患者情報がなければ他の3つを控えめに表示
+/* 看護診断の型：実在型 → 直前の情報は S ／ リスク型・目標指向型 → 直前の情報は E */
+const DX_TYPES={
+  actual:{name:'実在型',   hint:'いま起きている問題。看護診断に直接つながる情報は <b>S（症状・徴候）</b>になります。'},
+  risk:  {name:'リスク型', hint:'まだ起きていないが起こりうる問題。看護診断に直接つながる情報は S ではなく <b>E（危険因子）</b>になります。'},
+  goal:  {name:'目標指向型',hint:'より良い状態をめざす診断。看護診断に直接つながる情報は S ではなく <b>E（関連因子）</b>になります。'}
+};
+let dxType='actual';
+const dxTypeOf=n=>DX_TYPES[n.data('dxtype')]?n.data('dxtype'):'actual';
+function setDxSeg(t){ dxType=t; document.querySelectorAll('#dxTypeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.x===t)); document.getElementById('dxTypeHint').innerHTML=DX_TYPES[t].hint; }
+setDxSeg('actual');
+document.getElementById('dxTypeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  setDxSeg(b.dataset.x); document.getElementById('nodeText').focus();
+  coachEvent('dx_type',{t:dxType});
+});
+function changeDxType(n,t){
+  if(dxTypeOf(n)===t) return;
+  n.data('dxtype',t); log('dx_type',{id:n.id(),dxtype:t}); relabelDiagnoses(); refresh();
+}
 /* OP/TP/EP の選択 */
 document.getElementById('careSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -990,6 +740,8 @@ function addNode(type,payload,opts){
   }else if(type==='care'){
     base=payload.text; extra={carekind:payload.carekind};
     label=wrapJa(payload.carekind+': '+payload.text);   // OP:/TP:/EP: を頭に付与
+  }else if(type==='diagnosis'){
+    base=payload.text; label=payload.text; extra={dxtype:DX_TYPES[payload.dxtype]?payload.dxtype:'actual'};
   }else if(type==='info'){
     base=payload.text; label=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))};
   }else{ base=payload.text; label=payload.text; }
@@ -1026,7 +778,7 @@ document.getElementById('addNode').addEventListener('click',()=>{
     addNode('info',{text:v,supp}); ta.value=sj.value=ob.value=''; ta.focus();
   }else{
     const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
-    addNode(currentType,{text:v}); ta.value=''; ta.focus();
+    addNode(currentType,{text:v,dxtype:dxType}); ta.value=''; ta.focus();
   }
 });
 document.getElementById('careText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) document.getElementById('addNode').click(); });
@@ -1085,7 +837,6 @@ const KATA={
   toCare:`<span class="lead"><b>【関連図の作法】</b></span>看護計画（OP/TP/EP）は、原因に「働きかける」ものです。原因から看護ケアへ矢印を引くのではなく、<b>看護ケア ➔ 働きかける原因</b>の向き（二重線）で結びましょう。`,
   careTarget:`<span class="lead"><b>【関連図の作法】</b></span>看護ケアの矢印は、働きかける<b>原因（E）や症状（S）</b>へ向けます。患者情報・看護診断・他の看護ケアへは結びません。`,
   noPatient:`<span class="lead"><b>【関連図の作法】</b></span>関連図は<b>患者</b>を起点に描きます。まず「患者情報」（氏名・年齢・病名）を置いてから、情報・看護診断・看護ケアを置きましょう。`,
-  patientFirst:`<span class="lead"><b>まずは「患者情報」から</b></span>関連図は患者を起点に描きます。氏名・年齢・病名を入れて「図に置く」を押すと、情報・看護診断・看護ケアが選べるようになります。`,
   toPatient:`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`
 };
 /* ---- エッジ（PESの作法バリデーション付き）---- */
@@ -1138,10 +889,15 @@ function addEdge(s,t,{potential=false}={}){
 const isInfoNode=n=>{ const t=n.data('ntype'); return t==='info'||t==='speech'||t==='data'; };
 /* 図全体を解析：node id → {role:'S'|'E', level}。S=0、E1=1、E2=2…（複数経路は最短を採用） */
 function analyzePES(c){
-  const info={}, q=[];
+  const info={}, q=[], q1=[];
+  // 実在型の診断に直接入る情報 = S（0段）／ リスク型・目標指向型の診断に直接入る情報 = E1（1段）。両方なら S を優先
   c.nodes().filter(isInfoNode).forEach(n=>{
-    if(n.outgoers('edge').some(e=>e.target().data('ntype')==='diagnosis')){ info[n.id()]={role:'S',level:0}; q.push(n); }
+    const dx=n.outgoers('edge').targets().filter(t=>t.data('ntype')==='diagnosis');
+    if(!dx.length) return;
+    if(dx.some(d=>dxTypeOf(d)==='actual')){ info[n.id()]={role:'S',level:0}; q.push(n); }
+    else q1.push(n);
   });
+  q1.forEach(n=>{ if(!info[n.id()]){ info[n.id()]={role:'E',level:1}; q.push(n); } });
   while(q.length){
     const n=q.shift(), lv=info[n.id()].level;
     n.incomers('edge').forEach(e=>{
@@ -1157,13 +913,13 @@ function pesRole(edge,info){
   info=info||analyzePES(edge.cy());
   const tgt=edge.target();
   if(!isInfoNode(edge.source())) return null;      // 患者情報など、発話・データ以外から出る線にはE/Sを付けない
-  if(tgt.data('ntype')==='diagnosis') return {role:'S',level:0};
+  if(tgt.data('ntype')==='diagnosis') return dxTypeOf(tgt)==='actual' ? {role:'S',level:0} : {role:'E',level:1};
   const t=info[tgt.id()];
   if(t) return {role:'E',level:t.level+1};
   return null;
 }
 const pesTagOf=(role,level)=> role==='S' ? 'S' : 'E'+level;
-const pesEdgeText=(role,level)=> role==='S' ? '（S：症状・徴候）' : `（E${level}：原因・関連因子）`;
+const pesEdgeText=(role,level)=> role==='S' ? 'S' : 'E'+level;   // 図中は記号だけ（意味は凡例で示す）
 /* ノードのPES役割（'S' / 'E' / null）。第2引数に analyzePES の結果を渡すと再計算しない */
 function nodeRole(n,info){ info=info||analyzePES(n.cy()); const r=info[n.id()]; return r?r.role:null; }
 /* ノードに働きかける看護ケア(OP/TP/EP)の種別配列。向きは「看護ケア ➔ 原因」 */
@@ -1227,7 +983,7 @@ function updatePES(c,quiet){
     const r=pesRole(e,info);
     if(r){
       if(e.data('pes')!==r.role || e.data('pesLevel')!==r.level){ e.data('pes',r.role); e.data('pesLevel',r.level); if(!quiet) log('pes_role',{id:e.id(),pes:pesTagOf(r.role,r.level)}); }
-      e.removeData('pesLabel');   // 矢印に文字は出さない（色＋凡例で示す）
+      e.data('pesLabel',pesEdgeText(r.role,r.level));
     }
     else if(e.data('pes')!==undefined){ e.removeData('pes'); e.removeData('pesLevel'); e.removeData('pesLabel'); }
   });
@@ -1245,7 +1001,7 @@ function updatePES(c,quiet){
 /* ---- 看護診断の優先順位 ---- */
 function relabelDiagnoses(){
   diagnosisOrder.forEach((id,i)=>{ const n=cy.getElementById(id); if(n.empty())return;
-    n.data('label', diagnosisOrder.length>1?`#${i+1}  ${n.data('base')}`:n.data('base')); });
+    n.data('label', (diagnosisOrder.length>1?`#${i+1}  `:'')+n.data('base')+`\n〔${DX_TYPES[dxTypeOf(n)].name}〕`); });
 }
 function renderDiagnoses(){
   diagnosisOrder=diagnosisOrder.filter(id=>!cy.getElementById(id).empty());
@@ -1256,16 +1012,19 @@ function renderDiagnoses(){
     const n=cy.getElementById(id);
     const item=document.createElement('div');   // 行 + PES集計 をまとめる
     const row=document.createElement('div'); row.className='diagrow';
-    row.innerHTML=`<span class="pri">#${i+1}</span><span class="txt">${esc(n.data('base'))}</span>
+    row.innerHTML=`<span class="pri">#${i+1}</span><span class="txt">${esc(n.data('base'))} <span style="font-size:10.5px;color:var(--ink-soft)">〔${DX_TYPES[dxTypeOf(n)].name}〕</span></span>
       <span class="mv"><button class="up" ${i===0?'disabled':''}>▲</button><button class="down" ${i===diagnosisOrder.length-1?'disabled':''}>▼</button></span>`;
     row.querySelector('.up').onclick=()=>moveDiag(i,-1); row.querySelector('.down').onclick=()=>moveDiag(i,1);
     item.appendChild(row);
 
     // E→…→S→P の連鎖で仕分け：Pへ入る=S、Sより上流=E1,E2…
     const info=analyzePES(cy);
-    const Snodes=n.incomers('edge').map(e=>e.source()).filter(x=>info[x.id()]&&info[x.id()].role==='S');
+    const actual=dxTypeOf(n)==='actual';
+    const direct=n.incomers('edge').map(e=>e.source()).filter(x=>info[x.id()]);
+    const Snodes=actual?direct.filter(x=>info[x.id()].role==='S'):[];
     const S=[...new Set(Snodes.map(sn=>sn.data('base')))];
     const byLv={}, seen=new Set(); let q=[...Snodes];
+    if(!actual) direct.forEach(x=>{ seen.add(x.id()); (byLv[1]=byLv[1]||[]).push(x.data('base')); q.push(x); });
     while(q.length){ const x=q.shift();
       x.incomers('edge').forEach(e=>{ const u=e.source(), r=info[u.id()];
         if(!r||r.role!=='E'||seen.has(u.id())) return; seen.add(u.id());
@@ -1273,6 +1032,12 @@ function renderDiagnoses(){
     const lvs=Object.keys(byLv).map(Number).sort((a,b)=>a-b);
     const eRows=lvs.map(l=>`<div class="prow"><span class="tag e">E${l}</span><span class="items">${[...new Set(byLv[l])].map(esc).join('、')}</span></div>`).join('');
     const sub=document.createElement('div'); sub.className='pes-sub';
+    if(!actual){
+      sub.innerHTML=`<div style="font-size:11px;color:var(--ink-soft);margin-bottom:3px">${DX_TYPES[dxTypeOf(n)].name}：診断に直接つながるのは E（${dxTypeOf(n)==='risk'?'危険因子':'関連因子'}）です</div>
+        ${eRows || '<div class="prow"><span class="tag e">E</span><span class="items"><span class="miss">E（'+(dxTypeOf(n)==='risk'?'危険因子':'関連因子')+'）が未接続 → E ➔ P を繋ぎましょう</span></span></div>'}
+        <div style="margin-top:3px">${lvs.length?`<span class="ok">✓ 連鎖ができています（${lvs.length}段：${lvs.slice().reverse().map(l=>'E'+l).join('→')}→P）</span>`:''}</div>`;
+      item.appendChild(sub); list.appendChild(item); return;
+    }
     sub.innerHTML=`
       <div class="prow"><span class="tag s">S</span><span class="items">${S.length?S.map(esc).join('、'):'<span class="miss">症状・徴候（S）が未接続 → S ➔ P を繋ぎましょう</span>'}</span></div>
       ${eRows || `<div class="prow"><span class="tag e">E</span><span class="items">${S.length?'<span class="miss">症状の原因（E）が未接続 → E ➔ S を繋ぎましょう</span>':'<span class="unset">— まず S を繋いでから</span>'}</span></div>`}
@@ -1323,15 +1088,17 @@ function computeChecks(){
   const Snodes=cy.nodes().filter(n=>isInfoNode(n) && n.outgoers('edge').some(e=>e.target().data('ntype')==='diagnosis'));
   const Enodes=eNodes();
   const unlinked=cy.nodes().filter(n=>n.degree()===0);
-  const pNoS=diags.filter(d=>d.incomers('edge').length===0);
+  const pNoS=diags.filter(d=>!d.incomers('edge').sources().some(isInfoNode));
+  const actualDx=diags.filter(d=>dxTypeOf(d)==='actual');
+  const SnodesA=Snodes.filter(sn=>sn.outgoers('edge').targets().some(t=>t.data('ntype')==='diagnosis'&&dxTypeOf(t)==='actual'));
   const sNoE=Snodes.filter(s=>s.incomers('edge').length===0);
   const roots=chainRoots(cy), noCare=uncoveredRoots(cy);
   return [
     {label:'看護診断（P）を置いた', ok:diags.length>0, detail:diags.length?'':'看護診断がまだありません'},
-    {label:'各 P に S（症状）が接続', ok:diags.length>0&&pNoS.length===0,
-      detail:diags.length===0?'まず P を置く':pNoS.length?'Sのない診断：'+pNoS.map(d=>d.data('base')).join('、'):''},
-    {label:'各 S に E（原因）が接続', ok:Snodes.length>0&&sNoE.length===0,
-      detail:Snodes.length===0?'まず S ➔ P を繋ぐ':sNoE.length?'Eのない症状：'+sNoE.map(s=>s.data('base')).join('、'):''},
+    {label:'各 P に根拠が接続（実在型はS、リスク型・目標指向型はE）', ok:diags.length>0&&pNoS.length===0,
+      detail:diags.length===0?'まず P を置く':pNoS.length?'根拠のない診断：'+pNoS.map(d=>d.data('base')).join('、'):''},
+    {label:'各 S に E（原因）が接続', ok: actualDx.length===0 ? diags.length>0 : (SnodesA.length>0&&sNoE.filter(x=>SnodesA.some(a=>a.id()===x.id())).length===0),
+      detail: actualDx.length===0 ? (diags.length?'':'まず P を置く') : SnodesA.length===0?'まず S ➔ P（実在型）を繋ぐ':sNoE.length?'Eのない症状：'+sNoE.map(s=>s.data('base')).join('、'):''},
     {label:'各連鎖に、介入するEの看護計画', ok:roots.length>0&&noCare.length===0,
       detail:roots.length===0?'まず連鎖（E ➔ S ➔ P）を作る':noCare.length?'看護計画のない連鎖：'+noCare.map(e=>e.data('base')).join('、')+' から始まる連鎖':''},
     {label:'孤立した情報がない', ok:cy.nodes().length>0&&unlinked.length===0,
@@ -1449,10 +1216,11 @@ function refresh(){
   renderCare();         // E ごとの OP/TP/EP 点検
   renderDiagnoses();
   renderGauge();        // A: PESの作法 達成度
+  scheduleSpread();     // ラベルの大きさが変わったら線の折れ点も計算し直す
 }
 const PHASE_GUIDE={
   input:{step:'STEP 1 ／ アセスメント', html:'まず <b>患者情報</b> を置き、続けて <b>情報（主観・客観データ付き）・看護診断（P）・看護ケア（OP/TP/EP）</b> を置きましょう。'},
-  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてクリック＝線を引く。<b>E（原因）→…→S（症状）→P（診断）</b>の向きで繋ぎ、看護ケアは<b>看護ケア ➔ 働きかけるE</b>（二重線）。原因と症状の間の「途中の変化」を省略せず挟みましょう。'},
+  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてクリック＝線を引く。<b>E（原因）→…→S（症状）→P（診断）</b>の向きで繋ぎ（リスク型・目標指向型の診断は <b>E→P</b>）、看護ケアは<b>看護ケア ➔ 働きかけるE</b>（二重線）。原因と症状の間の「途中の変化」を省略せず挟みましょう。'},
   reflect:{step:'STEP 3 ／ 看護診断・看護計画の点検', html:'右で <b>各Pが S（症状）に、SがE（原因の連鎖）に支えられ、介入するEに看護計画（OP/TP/EP）がある</b> かを点検し、優先順位（＃）を整えて、図を完成させましょう。'}
 };
 function setPhase(p){
@@ -1466,8 +1234,97 @@ function setPhase(p){
 });
 
 /* ---- ツールバー ---- */
-document.getElementById('fitBtn').onclick=()=>cy.fit(null,50);
-document.getElementById('relayoutBtn').onclick=()=>{ const l=cy.layout({name:'cose',animate:true,padding:40,nodeRepulsion:9000,idealEdgeLength:100}); l.one('layoutstop',spreadEndpoints); l.run(); };
+document.getElementById('fitBtn').onclick=fitView;
+/* ============================================================
+   再配置（関連図の意味に沿った、毎回同じ結果になる並べ方）
+   ・左→右に 患者情報 | E(n) … E2 | E1 | S | 看護診断 の列
+   ・看護診断ごとに横帯（優先順位 #1 が上）。連鎖に入る情報はその帯へ
+   ・看護ケアは、働きかける情報（E/S）の真下に縦に並べる
+   ・どこにもつながらない情報は、いちばん下の段にまとめる
+   ============================================================ */
+function pesLayoutPositions(c){
+  c=c||cy;
+  const info=analyzePES(c), pos={}, placed=new Set();
+  // 列は「Sまでの最長の段数」で決める（複数の連鎖に入る原因も、つながる先より必ず左に来るように）
+  const far={}, visiting=new Set();
+  const depth=n=>{ const id=n.id(); if(far[id]!==undefined) return far[id]; const r=info[id]; if(!r) return -1;
+    if(r.role==='S'){ far[id]=0; return 0; } if(visiting.has(id)) return r.level; visiting.add(id);
+    let m=r.level; n.outgoers('edge').targets().forEach(t=>{ if(info[t.id()]) m=Math.max(m,depth(t)+1); });
+    visiting.delete(id); far[id]=m; return m; };
+  c.nodes().forEach(n=>depth(n));
+  const maxL=Math.max(0,...Object.values(far));
+  const colOf=n=>{ const t=n.data('ntype');
+    if(t==='patient') return 0;
+    if(t==='diagnosis') return maxL+2;
+    const f=far[n.id()]; return (f!==undefined&&f>=0) ? 1+(maxL-f) : -1; };
+  const NC=maxL+3, colW=new Array(NC).fill(0);
+  c.nodes().forEach(n=>{ const k=colOf(n); if(k>=0) colW[k]=Math.max(colW[k],n.outerWidth()); });
+  c.nodes('[ntype="care"]').forEach(n=>{ const tg=n.outgoers('edge').targets()[0]; if(tg){ const k=colOf(tg); if(k>=0) colW[k]=Math.max(colW[k],n.outerWidth()); } });
+  const GAPX=90, colX=[]; let x=0;
+  for(let k=0;k<NC;k++){ const w=colW[k]||140; colX[k]=x+w/2; x+=w+GAPX; }
+  const order=[...diagnosisOrder.map(id=>c.getElementById(id)).filter(n=>n.nonempty()), ...c.nodes('[ntype="diagnosis"]').filter(n=>!diagnosisOrder.includes(n.id())).toArray()];
+  let top=0; const GAPY=34, BAND=60;
+  order.forEach(d=>{
+    // 帯に入る情報：その診断へさかのぼれる情報（まだ他の帯に置いていないもの）
+    const band=[], q=[d], seen=new Set([d.id()]);
+    while(q.length){ const n=q.shift(); n.incomers('edge').forEach(e=>{ const s=e.source(); if(seen.has(s.id())||!info[s.id()]) return; seen.add(s.id()); q.push(s); if(!placed.has(s.id())) band.push(s); }); }
+    const cols={}; band.forEach(n=>{ (cols[colOf(n)]=cols[colOf(n)]||[]).push(n); });
+    const rowH=Math.max(60,...band.map(n=>n.outerHeight()),d.outerHeight())+GAPY;
+    const maxCount=Math.max(1,...Object.values(cols).map(a=>a.length));
+    // 右の列から順に、つながる先の高さの平均で並べる（線の交差を減らす）
+    const yIdx={};
+    for(let k=NC-2;k>=1;k--){
+      const arr=cols[k]; if(!arr) continue;
+      const key=n=>{ const ys=n.outgoers('edge').targets().map(t=>yIdx[t.id()]).filter(v=>v!==undefined); return ys.length?ys.reduce((a,b)=>a+b,0)/ys.length:1e6; };
+      arr.sort((a,b)=>key(a)-key(b)||a.id().localeCompare(b.id(),undefined,{numeric:true}));
+      arr.forEach((n,i)=>{ yIdx[n.id()]=i+(maxCount-arr.length)/2; });
+    }
+    Object.keys(cols).forEach(k=>cols[k].forEach(n=>{ pos[n.id()]={x:colX[k],y:top+yIdx[n.id()]*rowH}; placed.add(n.id()); }));
+    const sY=d.incomers('edge').sources().map(s=>pos[s.id()]&&pos[s.id()].y).filter(v=>v!==undefined);
+    pos[d.id()]={x:colX[NC-1],y:sY.length?sY.reduce((a,b)=>a+b,0)/sY.length:top+(maxCount-1)*rowH/2}; placed.add(d.id());
+    let bottom=top+(maxCount-1)*rowH+rowH/2;
+    // 看護ケア：働きかける情報の真下に積む
+    const stack={};
+    c.nodes('[ntype="care"]').forEach(cn=>{
+      if(placed.has(cn.id())) return;
+      const tg=cn.outgoers('edge').targets().filter(t=>pos[t.id()]&&band.some(b=>b.id()===t.id()))[0]; if(!tg) return;
+      const k=tg.id(); stack[k]=(stack[k]||0)+1;
+      const y=bottom+GAPY/2+ (stack[k]-0.5)*(cn.outerHeight()+16);
+      pos[cn.id()]={x:pos[k].x,y}; placed.add(cn.id());
+      bottom=Math.max(bottom,y+cn.outerHeight()/2);
+    });
+    top=bottom+BAND;
+  });
+  // 患者情報：つながる先の高さに合わせて左端へ
+  c.nodes('[ntype="patient"]').forEach(p=>{
+    const ys=p.outgoers('edge').targets().map(t=>pos[t.id()]&&pos[t.id()].y).filter(v=>v!==undefined);
+    pos[p.id()]={x:colX[0],y:ys.length?Math.min(...ys)-Math.max(0,p.outerHeight()/2-20):0}; placed.add(p.id());
+  });
+  // 残り（どこにもつながらない／連鎖に入らない情報・看護ケア）は最下段に横並び
+  let rx=0, rowMax=0; const rest=c.nodes().filter(n=>!placed.has(n.id()));
+  rest.forEach(n=>{ const w=n.outerWidth(); pos[n.id()]={x:rx+w/2,y:top+n.outerHeight()/2}; rx+=w+40; rowMax=Math.max(rowMax,n.outerHeight()); });
+  return pos;
+}
+/* 全体表示：上の帯（案内・ツールバー）と下の凡例に隠れない範囲に、図全体を収める */
+function fitView(){
+  if(!cy.nodes().length) return;
+  const box=document.getElementById('cy'), W=box.clientWidth, H=box.clientHeight, r=box.getBoundingClientRect();
+  const topBand=Math.max(0,document.getElementById('stageTop').getBoundingClientRect().bottom-r.top)+16;
+  const lg=document.querySelector('.legend'), botBand=lg?Math.max(0,r.bottom-lg.getBoundingClientRect().top)+12:20;
+  const bb=cy.elements().boundingBox({includeLabels:true}), pad=30;
+  const aw=W-2*pad, ah=H-topBand-botBand;
+  const z=Math.max(cy.minZoom(),Math.min(1.4,aw/bb.w,ah/bb.h));
+  cy.zoom(z); cy.pan({x:pad+(aw-z*bb.w)/2-z*bb.x1, y:topBand+(ah-z*bb.h)/2-z*bb.y1});
+}
+function relayout(){
+  if(!cy.nodes().length) return;
+  const pos=pesLayoutPositions(cy);
+  const l=cy.layout({name:'preset',positions:n=>pos[n.id()]||n.position(),animate:false,fit:false});
+  l.one('layoutstop',()=>{ routeEdgesOf(cy); fitView(); });
+  l.run();
+  log('relayout',{nodes:cy.nodes().length});
+}
+/* 再配置ボタンは現段階では非表示（機能が熟成してから見直す）。relayout() は残してある */
 
 /* ---- C: ふりかえるボタン（事後の傾向フィードバック）---- */
 const reviewOverlay=document.getElementById('reviewOverlay');
@@ -1489,7 +1346,7 @@ const SAVE_VERSION=1;
 function serialize(){
   const nodes=cy.nodes().map(n=>({
     data:{ id:n.id(), base:n.data('base'), ntype:n.data('ntype'),
-      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), supp:n.data('supp') },
+      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), supp:n.data('supp'), dxtype:n.data('dxtype') },
     position:{ x:n.position('x'), y:n.position('y') }
   }));
   const edges=cy.edges().map(e=>({
@@ -1499,25 +1356,68 @@ function serialize(){
   return { app:'kanrenzu-workbench', version:SAVE_VERSION, savedAt:new Date().toISOString(),
     nodeSeq, diagnosisOrder:[...diagnosisOrder], nodes, edges, interactionLog:[...interactionLog] };
 }
-document.getElementById('saveBtn').onclick=()=>{
-  if(cy.nodes().length===0){ alert('保存する図がありません。'); return; }
-  const blob=new Blob([JSON.stringify(serialize(),null,2)],{type:'application/json'});
+/* ============================================================
+   保存（JSON）
+   ・Chrome / Edge：保存先とファイル名を選び、2回目以降は同じファイルに「上書き保存」
+     （開いたファイルにも上書きできる）。「別名で保存」で新しいファイルにもできる
+   ・Safari / Firefox など未対応のブラウザ：従来どおりダウンロード
+   ・ブラウザ内の自動保存（localStorage）とは別の仕組みで、互いに影響しない
+   ============================================================ */
+const CAN_PICK = typeof window.showSaveFilePicker==='function';
+let fileHandle=null;
+const JSON_TYPES=[{description:'関連図データ（JSON）',accept:{'application/json':['.json']}}];
+function saveJsonText(){ log('save_json',{nodes:cy.nodes().length,edges:cy.edges().length,mode:fileHandle?'overwrite':'new'}); return JSON.stringify(serialize(),null,2); }
+function setFileState(){
+  const st=document.getElementById('fileState'), sv=document.getElementById('saveBtn'), sa=document.getElementById('saveAsBtn');
+  if(fileHandle){ st.textContent='📄 '+fileHandle.name; st.style.display=''; sv.textContent='💾 上書き保存'; sa.style.display=''; }
+  else{ st.style.display='none'; sv.textContent='💾 保存'; sa.style.display='none'; }
+}
+function flashFileState(msg){ setFileState(); const st=document.getElementById('fileState'); st.style.display=''; st.textContent=msg; clearTimeout(flashFileState.t); flashFileState.t=setTimeout(setFileState,2200); }
+async function writeTo(handle){
+  const w=await handle.createWritable(); await w.write(saveJsonText()); await w.close();
+}
+function downloadJson(){
+  const blob=new Blob([saveJsonText()],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const stamp=new Date().toLocaleString('ja-JP').replace(/[\/:\s]/g,'-');
   const a=document.createElement('a'); a.href=url; a.download=`関連図_${stamp}.json`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  log('save_json',{nodes:cy.nodes().length,edges:cy.edges().length});
+}
+async function saveDiagram(asNew){
+  if(cy.nodes().length===0){ alert('保存する図がありません。'); return; }
+  if(!CAN_PICK){ downloadJson(); return; }
+  try{
+    if(fileHandle && !asNew){ await writeTo(fileHandle); flashFileState('✓ 上書き保存しました：'+fileHandle.name); return; }
+    const p=cy.nodes('[ntype="patient"]')[0];
+    const nm=(p&&p.data('pname')?p.data('pname').replace(/\s+/g,''):'')||'';
+    const h=await window.showSaveFilePicker({suggestedName:`関連図${nm?'_'+nm:''}.json`,types:JSON_TYPES});
+    await writeTo(h); fileHandle=h; flashFileState('✓ 保存しました：'+h.name);
+  }catch(e){
+    if(e&&e.name==='AbortError') return;                       // 保存先の選択を取り消した
+    alert('保存できませんでした（'+(e&&e.message||e)+'）。ダウンロードで保存します。'); downloadJson();
+  }
+}
+document.getElementById('saveBtn').onclick=()=>saveDiagram(false);
+document.getElementById('saveAsBtn').onclick=()=>saveDiagram(true);
+document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&!tutActive){ e.preventDefault(); saveDiagram(false); } });
+
+function openParsed(text,handle){
+  let d; try{ d=JSON.parse(text); }catch(e){ alert('ファイルを読み込めませんでした（JSON形式ではありません）。'); return; }
+  if(!d||d.app!=='kanrenzu-workbench'||!Array.isArray(d.nodes)){ alert('この関連図ツールの保存ファイルではないようです。'); return; }
+  if(cy.nodes().length && !confirm('現在の図を置き換えて読み込みます。よろしいですか？')) return;
+  loadData(d); fileHandle=handle||null; setFileState();
+}
+document.getElementById('openBtn').onclick=async()=>{
+  if(typeof window.showOpenFilePicker!=='function'){ document.getElementById('openFile').click(); return; }
+  try{
+    const [h]=await window.showOpenFilePicker({types:JSON_TYPES,multiple:false});
+    const f=await h.getFile(); openParsed(await f.text(),h);   // 開いたファイルに、そのまま上書き保存できる
+  }catch(e){ if(e&&e.name!=='AbortError') alert('開けませんでした（'+(e&&e.message||e)+'）'); }
 };
-document.getElementById('openBtn').onclick=()=>document.getElementById('openFile').click();
 document.getElementById('openFile').addEventListener('change',ev=>{
   const f=ev.target.files[0]; if(!f) return;
   const rd=new FileReader();
-  rd.onload=()=>{
-    let d; try{ d=JSON.parse(rd.result); }catch(e){ alert('ファイルを読み込めませんでした（JSON形式ではありません）。'); return; }
-    if(!d||d.app!=='kanrenzu-workbench'||!Array.isArray(d.nodes)){ alert('この関連図ツールの保存ファイルではないようです。'); return; }
-    if(cy.nodes().length && !confirm('現在の図を置き換えて読み込みます。よろしいですか？')) return;
-    loadData(d);
-  };
+  rd.onload=()=>openParsed(rd.result,null);
   rd.readAsText(f); ev.target.value='';
 });
 /* 図の内容を差し替える（ログには触れない。チュートリアルの退避/復元でも使う）*/
@@ -1626,6 +1526,43 @@ document.getElementById('rbDiscard').onclick=()=>{
 };
 
 /* ---- 印刷 / PDF ---- */
+/* 印刷用ページ：1枚目＝図だけ（ノードの広がる範囲を、用紙1枚に収まるよう縮小）／2枚目＝一覧
+   図が縦長なら A4縦、横長なら A4横 を自動で選ぶ */
+function buildPrintHTML(){
+  routeEdgesOf(cy);
+  const bb=cy.elements().boundingBox({includeLabels:true});
+  const portrait = bb.h > bb.w*1.05;
+  const PW=portrait?190:277, PH=portrait?277:190;          // 余白10mmを除いた印刷可能範囲(mm)
+  const png=cy.png({full:true,scale:3,bg:'#ffffff',maxWidth:4200,maxHeight:4200});
+  const diags=diagnosisOrder.map((id,i)=>`<li><b>#${i+1}</b>　${esc(cy.getElementById(id).data('base'))}</li>`).join('');
+  const pinfo=analyzePES(cy);
+  const tagOf=n=>{ const x=pinfo[n.id()]; return x?(x.role==='S'?'S':'E'+x.level):''; };
+  const careList=cy.nodes('[ntype="care"]').map(n=>{ const tg=n.outgoers('edge').map(e=>e.target()).filter(t=>isInfoNode(t));
+    return `<li><b>${esc(n.data('carekind')||'')}</b> ${esc(n.data('base'))} — 対象：${tg.length?tg.map(t=>esc(tagOf(t)+' '+t.data('base'))).join('、'):'<span style="color:#9a3b34">働きかける原因が未設定</span>'}</li>`; }).join('');
+  const now=new Date().toLocaleString('ja-JP');
+  const lists = diags||careList;
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>関連図</title><style>
+    @page{size:A4 ${portrait?'portrait':'landscape'};margin:10mm}
+    *{box-sizing:border-box}
+    body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#23201b;margin:0}
+    .p1{width:${PW}mm;height:${PH-1}mm;display:flex;flex-direction:column;overflow:hidden}
+    .hd{display:flex;align-items:baseline;gap:12px;height:9mm}
+    h1{font-family:"Yu Mincho",serif;font-size:16px;margin:0}.meta{font-size:10px;color:#6b6459}
+    .fig{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border:1px solid #d8d2c4;border-radius:4px;padding:3mm}
+    .fig img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+    .lg{height:8mm;font-size:9.5px;color:#6b6459;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+    .p2{break-before:page;page-break-before:always;padding-top:2mm}
+    h2{font-size:13px;letter-spacing:.08em;border-bottom:1px solid #d8d2c4;padding-bottom:3px;margin:12px 0 6px}
+    ol.d,ul.c{list-style:none;padding:0;margin:0;font-size:12.5px}ol.d li,ul.c li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}ul.c b{color:#7b5aa6;margin-right:6px}
+    </style></head><body>
+    <section class="p1">
+      <div class="hd"><h1>関連図</h1><span class="meta">作成日時: ${now}</span></div>
+      <div class="fig"><img src="${png}" alt="関連図"></div>
+      <div class="lg"><span>■患者情報　■情報（主観・客観データ付き）　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e"><b>E1・E2…</b> 原因・関連因子／危険因子（診断に近い順）</span><span style="color:#2e8b8b"><b>S</b> 症状・徴候（実在型の直前）</span><span style="color:#7b5aa6">二重線＝看護ケア ➔ 働きかけるE</span></div>
+    </section>
+    ${lists?`<section class="p2">${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}${careList?`<h2>看護計画（OP/TP/EP）と、働きかける原因</h2><ul class="c">${careList}</ul>`:''}</section>`:''}
+    </body></html>`;
+}
 document.getElementById('printBtn').onclick=()=>{
   if(cy.nodes().length===0){ alert('印刷する図がありません。'); return; }
   const missing=uncoveredRoots(cy);
@@ -1635,32 +1572,9 @@ document.getElementById('printBtn').onclick=()=>{
       log('print_blocked_missing_care',{count:missing.length}); return;
     }
   }
-  const hopSvg=ORouter.printOverlay(cy);   // 交差のジャンプ（画像にぴったり重ねる）
-  const png=cy.png({full:true,scale:2,bg:'#ffffff',maxWidth:1600});
-  const diags=diagnosisOrder.map((id,i)=>`<li><b>#${i+1}</b>　${esc(cy.getElementById(id).data('base'))}</li>`).join('');
-  // 看護計画一覧（看護ケア ➔ 働きかける原因）
-  const pinfo=analyzePES(cy);
-  const tagOf=n=>{ const x=pinfo[n.id()]; return x?(x.role==='S'?'S':'E'+x.level):''; };
-  const careNodes=cy.nodes('[ntype="care"]');
-  const careList=careNodes.map(n=>{ const tg=n.outgoers('edge').map(e=>e.target()).filter(t=>isInfoNode(t));
-    return `<li><b>${esc(n.data('carekind')||'')}</b> ${esc(n.data('base'))} — 対象：${tg.length?tg.map(t=>esc(tagOf(t)+' '+t.data('base'))).join('、'):'<span style="color:#9a3b34">働きかける原因が未設定</span>'}</li>`; }).join('');
-  const now=new Date().toLocaleString('ja-JP');
+  const html=buildPrintHTML();
   const w=window.open('','_blank'); if(!w){ alert('ポップアップがブロックされました。印刷を許可してください。'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>関連図</title><style>
-    @page{size:A4 landscape;margin:12mm}
-    body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#23201b;margin:0;padding:8px}
-    h1{font-family:"Yu Mincho",serif;font-size:18px;margin:0 0 2px}.meta{font-size:11px;color:#6b6459;margin-bottom:10px}
-    .fig{width:100%;border:1px solid #d8d2c4;border-radius:6px}.fig img{width:100%;display:block}
-    .lg{font-size:11px;color:#6b6459;margin:6px 0 14px;display:flex;gap:16px;flex-wrap:wrap}
-    h2{font-size:13px;letter-spacing:.08em;border-bottom:1px solid #d8d2c4;padding-bottom:3px;margin:14px 0 6px}
-    ol.d,ul.c{list-style:none;padding:0;font-size:13px}ol.d li,ul.c li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}ul.c b{color:#c15a2e;margin-right:6px}
-    .task{font-size:13px;line-height:1.7;white-space:pre-wrap;background:#faf9f5;border:1px solid #d8d2c4;border-radius:6px;padding:10px}</style></head><body>
-    <h1>関連図</h1><div class="meta">作成日時: ${now}</div>
-    <div class="fig"><div style="position:relative"><img src="${png}">${hopSvg}</div></div>
-    <div class="lg"><span>■患者情報　■情報（主観・客観データ）　■看護診断（二重枠）　■看護ケア</span><span>実線＝実在／点線＝可能性</span><span style="color:#c15a2e">━原因（E）から結果へ</span><span style="color:#2e8b8b">━症状・徴候（S）から看護診断へ</span></div>
-    ${diags?`<h2>看護診断の優先順位</h2><ol class="d">${diags}</ol>`:''}
-    ${careList?`<h2>看護計画（OP/TP/EP）と、働きかける原因</h2><ul class="c">${careList}</ul>`:''}
-    </body></html>`);
+  w.document.write(html);
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); }; log('export_print',{nodes:cy.nodes().length,edges:cy.edges().length});
 };
 
@@ -1681,7 +1595,7 @@ window.addEventListener('load',()=>{ document.getElementById('nodeText').focus()
 const COACH={active:false,idx:0,done:false,ids:{},snap:null,pulse:null,phase:'input',completed:false};
 const cq=sel=>document.querySelector(sel);
 /* 完成図の配置（モデル座標）。置いた順に画面が動かないよう、完成形が収まる倍率に固定する */
-const COACH_POS={ p:{x:60,y:20}, e2:{x:60,y:200}, e1:{x:330,y:200}, s:{x:600,y:200}, d:{x:870,y:200}, c1:{x:330,y:370}, c2:{x:600,y:370} };
+const COACH_POS={ p:{x:60,y:20}, e2:{x:60,y:200}, e1:{x:330,y:200}, s:{x:600,y:200}, d:{x:870,y:200}, c1:{x:225,y:380}, c2:{x:445,y:380} };
 const COACH_BOX={x1:-60,y1:-30,x2:980,y2:410};
 
 function cClearForms(){ [pName,pAge,pDisease,nodeText,subjText,objText,careText].forEach(x=>x.value=''); }
@@ -1693,40 +1607,55 @@ const nm=key=>{ const id=COACH.ids[key]; const n=id&&cy.getElementById(id); retu
 const COACH_STEPS=[
  {kind:'read', title:'いっしょに1枚描いてみましょう',
   body:'この画面のまま、模擬患者さんの関連図を1枚描きます。<b>光っている所だけ</b>が押せます。入力は、例を見ながら<b>自分で</b>打ち込みます。<br><br><b>症例</b>：航空 太郎さん（90歳）。慢性心不全で入院中。心臓のはたらきが弱く、両下肢にむくみがあります。「足の裏が鈍くて、床を踏んでいる感じがしない」と話し、夜間はトイレまで歩いて行きます。<br><br>いまの図は一時的に退避され、終わると元に戻ります。いつでも「スキップ」できます。'},
- {kind:'click', type:'patient', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="patient"]')], title:'まず「患者情報」を選ぶ',
-  body:'左上に、置くものが4種類並んでいます。<b>患者情報</b>、<b>情報</b>（症状・原因など）、<b>看護診断</b>、<b>看護ケア</b>です。<br>関連図は患者を起点に描くので、最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
+ {kind:'click', type:'info', tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
+  body:'置くものは4種類です。患者情報、情報（症状・原因など）、看護診断、看護ケア。まず<b>「情報」</b>を選んでみましょう。',
+  act:'光っている「情報（症状・原因など）」を押します。',
+  res:'入力欄が出ました。情報には、<b>名前</b>のほかに、根拠として<b>主観データ</b>（患者が語ったこと）と<b>客観データ</b>（測った・見た事実）を添えられます。'},
+ {kind:'try_add', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
+  title:'そのまま置いてみる（わざと）',
+  body:'「情報の名前」に<b>足底の感覚低下</b>と入力してください。そして、<b>患者情報がない状態</b>で置くとどうなるか、試してみましょう。',
+  act:'入力したら「＋ 図に置く」を押します。',
+  res:'エラーになりました。関連図は<b>患者を起点</b>に描きます。まず患者情報から置きましょう。'},
+ {kind:'click', type:'patient', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="patient"]')], title:'「患者情報」を選ぶ',
+  body:'最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
  {kind:'add', nodeType:'patient', key:'p', tag:'ここに入力して押す', target:()=>[cq('#patientInput'),cq('#addNode')], title:'患者情報を入れる',
   body:'「氏名」に<b>航空 太郎</b>、「年齢」に<b>90</b>、「病名」に<b>慢性心不全</b>と入力してください。',
   act:'入力したら「＋ 図に置く」を押します。',
   res:'図の左上に<b>【患者情報】</b>の枠が表示されました。患者情報は<b>1人に1つ</b>なので、ボタンは「入力済み」になり、もう選べません。'},
  {kind:'click', type:'diagnosis', tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="diagnosis"]')], title:'「看護診断」を選ぶ',
   body:'今回は流れをつかむため、先にゴールの<b>看護診断（P）</b>を置きます。', act:'光っている「看護診断」を押します。', res:'看護診断の入力欄が出ました。'},
+ {kind:'click', dxType:'risk', tag:'ここを押す', target:()=>[cq('#dxTypeSeg')], title:'看護診断の「型」を選ぶ',
+  body:'看護診断には<b>実在型・リスク型・目標指向型</b>があります。型によって、診断に直接つながる情報が変わります。<br>・実在型 … 直前の情報は <b>S（症状・徴候）</b><br>・リスク型・目標指向型 … 直前の情報は <b>E</b><br>「転倒転落リスク状態」は、まだ起きていないが起こりうる問題なので<b>リスク型</b>です。',
+  act:'光っている中から「リスク型」を押します。', res:'リスク型が選ばれました。'},
  {kind:'add', nodeType:'diagnosis', key:'d', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')], title:'看護診断を置く',
   body:'入力欄に<b>転倒転落リスク状態</b>と入力してください。',
-  act:'入力したら「＋ 図に置く」を押します。', res:'図の右側に、<b>二重の枠</b>で看護診断が表示されました。看護診断は、集まった情報から導いた「結論」です。ここから、その根拠をさかのぼります。'},
+  act:'入力したら「＋ 図に置く」を押します。', res:'図の右側に、<b>二重の枠</b>で看護診断が表示されました。下に〔リスク型〕と型も表示されています。看護診断は、集まった情報から導いた「結論」です。ここから、その根拠をさかのぼります。'},
  {kind:'click', type:'info', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="info"]')], title:'「情報」を選ぶ',
   body:'診断の根拠になる情報を置きます。', act:'光っている「情報」を押します。', res:'情報の入力欄に戻りました。'},
  {kind:'add', nodeType:'info', key:'s', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
-  title:'S：診断の直接の根拠を置く',
-  body:'「転倒しそうだ」と考える<b>直接の根拠</b>がS（症状・徴候）です。<br>「情報の名前」に<b>足底の感覚低下</b>、「主観」に患者の言葉<b>足の裏が鈍くて、床を踏んでいる感じがしない</b>と入力してください。「客観」は空欄のままでOKです。',
+  title:'E1：診断に直接つながる危険因子を置く',
+  body:'「転倒しそうだ」と考える<b>直接の根拠</b>を置きます。リスク型の診断では、これは S ではなく <b>E1（危険因子）</b>になります（実在型の診断なら、ここが S＝症状・徴候 です）。<br>「情報の名前」に<b>足底の感覚低下</b>、「主観」に患者の言葉<b>足の裏が鈍くて、床を踏んでいる感じがしない</b>と入力してください。「客観」は空欄のままでOKです。',
   act:'入力したら「＋ 図に置く」を押します。', res:'図に情報が表示されました。1行目が<b>名前</b>、その下に<b>「主観：…」</b>の行が入っています。'},
- {kind:'link', from:'s', to:'d', tag:'', title:'S ➔ P をつなぐ',
-  body:'<b>看護診断に直接入る情報がS</b>です。ノードを<b>2つ続けてクリック</b>すると、1つ目から2つ目へ線が引かれます。',
-  act:()=>`光っている①「${nm('s')}」→②「${nm('d')}」の順にクリックします。`, res:'線が引かれ、ノードの頭に<b>「S:」</b>の印がつきました。「Pに直接入る情報＝S」と自動で判定されます。'},
+ {kind:'link', from:'s', to:'d', tag:'', title:'E1 ➔ P をつなぐ',
+  body:'リスク型の診断に直接入る情報は <b>E1</b> です。ノードを<b>2つ続けてクリック</b>すると、1つ目から2つ目へ線が引かれます。',
+  act:()=>`光っている①「${nm('s')}」→②「${nm('d')}」の順にクリックします。`, res:'線が引かれ、ノードの頭に<b>「E1:」</b>の印がつきました。診断の型（リスク型）から、自動で E と判定されます。実在型の診断につなげば「S:」になります。'},
+ {kind:'try_link', from:'d', to:'s', title:'わざと逆向きにつなぐ',
+  body:'看護診断は結論なので、<b>診断から矢印を出すことはできません</b>。作法を体験するために、わざと逆向きに引いてみます。',
+  act:()=>`光っている①「${nm('d')}」→②「${nm('s')}」の順にクリックします。`, res:'【関連図の作法】が教えてくれました。矢印は必ず<b>「情報 ➔ 診断」</b>の向きです。'},
  {kind:'add', nodeType:'info', key:'e1', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
-  title:'E1：Sの原因を置く',
-  body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」を考えます。両下肢の浮腫が原因です。Sにつながる原因が<b>E（原因・関連因子）</b>です。<br>「情報の名前」に<b>両下肢の浮腫</b>、「客観」に<b>両下腿に圧痕あり。体重が3日間で2kg増加</b>と入力してください。今度は「主観」が空欄です（どちらか片方でもOK）。',
+  title:'E2：さらに原因をさかのぼる',
+  body:'「<b>なぜ</b>足の裏の感覚が鈍いのか？」を考えます。両下肢の浮腫が原因です。E1 のさらに原因なので <b>E2</b> です。<br>「情報の名前」に<b>両下肢の浮腫</b>、「客観」に<b>両下腿に圧痕あり。体重が3日間で2kg増加</b>と入力してください。今度は「主観」が空欄です（どちらか片方でもOK）。',
   act:'入力したら「＋ 図に置く」を押します。', res:'図に表示されました。今度は<b>「客観：…」</b>の行が入っています。'},
- {kind:'link', from:'e1', to:'s', title:'E ➔ S をつなぐ',
-  body:'原因から症状へ、<b>原因 ➔ 結果</b>の向きで引きます。',
-  act:()=>`光っている①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'Sの手前の原因は<b>「E1」</b>です。Eから出る矢印は<b>赤</b>、SからPへの矢印は<b>青緑</b>で色分けされます（色の意味は図の下の凡例にあります）。'},
+ {kind:'link', from:'e1', to:'s', title:'E2 ➔ E1 をつなぐ',
+  body:'原因から結果へ、<b>原因 ➔ 結果</b>の向きで引きます。',
+  act:()=>`光っている①「${nm('e1')}」→②「${nm('s')}」の順にクリックします。`, res:'E1 の手前の原因は<b>「E2」</b>です。矢印にも「E2」と自動表示されました。'},
  {kind:'add', nodeType:'info', key:'e2', tag:'ここに入力して押す', target:()=>[cq('#singleInput'),cq('#addNode')],
-  title:'さらに原因をさかのぼる',
-  body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能の低下です。原因の原因は<b>E2</b>。「心不全 ➔ 転倒」と一足飛びにせず、間の変化を一歩ずつ置きます。<br>「情報の名前」に<b>心機能の低下</b>、「主観」に<b>少し歩くだけで息が切れる</b>、「客観」に<b>心エコーで駆出率35%</b>と入力してください。',
+  title:'E3：もう一歩さかのぼる',
+  body:'「<b>なぜ</b>浮腫があるのか？」心臓のポンプ機能の低下です。原因の原因は<b>E3</b>。「心不全 ➔ 転倒」と一足飛びにせず、間の変化を一歩ずつ置きます。<br>「情報の名前」に<b>心機能の低下</b>、「主観」に<b>少し歩くだけで息が切れる</b>、「客観」に<b>心エコーで駆出率35%</b>と入力してください。',
   act:'入力したら「＋ 図に置く」を押します。', res:'主観と客観の<b>両方</b>の行が入りました。Eを細かく分解するほど、看護ケアも具体的にできます。'},
- {kind:'link', from:'e2', to:'e1', title:'E2 ➔ E1 をつなぐ',
+ {kind:'link', from:'e2', to:'e1', title:'E3 ➔ E2 をつなぐ',
   body:'同じく、原因 ➔ 結果の向きです。',
-  act:()=>`光っている①「${nm('e2')}」→②「${nm('e1')}」の順にクリックします。`, res:'連鎖が <b>E2 ➔ E1 ➔ S ➔ P</b> になりました。さかのぼるほどEの数字が増えます。'},
+  act:()=>`光っている①「${nm('e2')}」→②「${nm('e1')}」の順にクリックします。`, res:'連鎖が <b>E3 ➔ E2 ➔ E1 ➔ P</b> になりました。さかのぼるほどEの数字が増えます。'},
  {kind:'link', from:'p', to:'e2', title:'患者から始める',
   body:'いちばん上流の原因は、患者の病気・背景に由来します。起点の患者情報から線を引きます。',
   act:()=>`光っている①「患者情報」→②「${nm('e2')}」の順にクリックします。`, res:'患者から結論まで、1本の道がつながりました。'},
@@ -1772,7 +1701,7 @@ function coachStart(){
   document.body.classList.add('coaching');
   tutActive=true; COACH.active=true; COACH.idx=0; COACH.done=false; COACH.ids={}; COACH.completed=false;
   cy.elements().remove(); diagnosisOrder=[]; nodeSeq=0; linkSource=null;
-  cClearForms(); cResetCareKind(); selectType('patient'); refresh(); setPhase('input');
+  cClearForms(); cResetCareKind(); setDxSeg('actual'); selectType('patient'); refresh(); setPhase('input');
   cy.userPanningEnabled(false); cy.userZoomingEnabled(false); cy.autoungrabify(true);
   coachFitView();
   cq('#coach').classList.add('on');
@@ -1790,7 +1719,7 @@ function coachEnd(reason){
   cy.userPanningEnabled(true); cy.userZoomingEnabled(true); cy.autoungrabify(false);
   cy.nodes().removeClass('hl hlb');
   applyData(COACH.snap);                      // 退避しておいた図を元に戻す
-  cClearForms(); cResetCareKind(); selectType(cy.nodes('[ntype="patient"]').length?'info':'patient');
+  cClearForms(); cResetCareKind(); setDxSeg('actual'); selectType(cy.nodes('[ntype="patient"]').length?'info':'patient');
   setPhase(COACH.phase);
   interactionLog.push(completed?{t:Date.now(),action:'tutorial_complete'}:{t:Date.now(),action:'tutorial_exit',step,total:COACH_STEPS.length,reason:reason||'skip'});
   COACH.snap=null; scheduleAutosave();
@@ -1811,7 +1740,7 @@ function coachEvent(name,d){
   if(!COACH.active||COACH.done) return;
   const st=COACH_STEPS[COACH.idx]; let ok=false;
   switch(st.kind){
-    case 'click': ok= st.careKind ? (name==='care_kind'&&d.kind===st.careKind) : (name==='type_selected'&&d.type===st.type); break;
+    case 'click': ok= st.careKind ? (name==='care_kind'&&d.kind===st.careKind) : st.dxType ? (name==='dx_type'&&d.t===st.dxType) : (name==='type_selected'&&d.type===st.type); break;
     case 'add': if(name==='node_added'&&d.type===st.nodeType){
         COACH.ids[st.key]=d.id; cy.getElementById(d.id).position({...COACH_POS[st.key]}); spreadEndpoints(); ok=true; } break;
     case 'try_add': ok=(name==='add_blocked'); break;
