@@ -150,7 +150,7 @@
   .question .q{font-family:"Yu Mincho",serif;font-size:14px;line-height:1.6;margin-bottom:10px}
   .question textarea{font-size:12.5px;min-height:70px}
 
-  /* キャンバス上部の帯：左=フェーズガイド／右=ツールバー。位置を固定せず並べ、足りなければ折り返す（重ならない） */
+  /* キャンバス上部の帯：ツールバー。位置を固定せず並べ、足りなければ折り返す（重ならない） */
   #stageTop{position:absolute;top:12px;left:12px;right:12px;z-index:5;display:flex;flex-wrap:wrap;
     gap:10px;align-items:flex-start;pointer-events:none}   /* 帯の空き部分は下のキャンバスを操作できる */
   #stageTop > *{pointer-events:auto}
@@ -158,6 +158,11 @@
   .toolbar button{border:1px solid var(--rule);background:#ffffffdd;backdrop-filter:blur(4px);border-radius:6px;padding:6px 11px;font-size:12px;cursor:pointer;font-weight:600;color:var(--ink-soft);}
   .toolbar button:hover{color:var(--ink);border-color:var(--ink)}
   .toolbar button.print{border-color:var(--ink);color:var(--ink)}
+  .zoomgrp{display:inline-flex}
+  .zoomgrp button{border-radius:0;margin-left:-1px;min-width:34px}
+  .zoomgrp button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+  .zoomgrp button:last-child{border-radius:0 6px 6px 0}
+  #zoomPct{min-width:56px;font-variant-numeric:tabular-nums}
 
   /* 自動保存の状態表示 */
   .astate{align-self:center;font-size:11px;color:var(--ink-soft);background:#ffffffdd;backdrop-filter:blur(4px);
@@ -214,16 +219,13 @@
   .rnote{font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-top:6px;padding-top:10px;border-top:1px dashed var(--rule)}
   .legend{position:absolute;bottom:12px;left:12px;z-index:5;background:#ffffffdd;backdrop-filter:blur(4px);border:1px solid var(--rule);border-radius:8px;padding:9px 12px;font-size:11.5px;display:flex;gap:14px;flex-wrap:wrap;max-width:calc(100% - 24px)}
   .legend span{display:flex;align-items:center;gap:5px;color:var(--ink-soft)}
+  .legend .lgtoggle{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:1px 9px;font-size:11px;color:var(--ink-soft);cursor:pointer;font-family:inherit}
+  .legend .lgtoggle:hover{color:var(--ink);border-color:var(--ink)}
+  .legend.min > span{display:none}
   .legend .sw{width:12px;height:12px;border-radius:3px;flex:none}
   .legend .sw.diag{border:3px double var(--diag);background:var(--diag-bg);border-radius:2px;width:14px;height:14px}
   .empty-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.8;pointer-events:none;}
   .empty-hint .big{font-family:"Yu Mincho",serif;font-size:17px;color:var(--ink);display:block;margin-bottom:6px}
-  /* フェーズガイド */
-  #phaseGuide{flex:1 1 300px;max-width:440px;
-    background:#ffffffee;backdrop-filter:blur(4px);border:1px solid var(--rule);border-left:4px solid var(--ink);
-    border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink);box-shadow:var(--shadow)}
-  #phaseGuide b{font-family:"Yu Mincho",serif;letter-spacing:.02em}
-  #phaseGuide .step{font-size:10px;letter-spacing:.12em;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:2px}
 
   /* 右クリックメニュー */
   .ctxmenu{position:fixed;z-index:60;background:#fff;border:1px solid var(--rule);border-radius:8px;box-shadow:var(--shadow);padding:4px;min-width:158px;display:none;font-size:13px}
@@ -248,7 +250,6 @@
   .sm-empty{font-size:12px;color:var(--ink-soft)}
   .sm-add{margin-top:5px;border:none;border-radius:7px;padding:7px 12px;font-size:12.5px;color:#fff;cursor:pointer;font-family:inherit}
   .sm-add.s{background:#2f6f9f}.sm-add.o{background:#3f8a5c}
-  body.coaching #phaseGuide{display:none !important}
   #coach.on ~ #toastWrap{top:84px;bottom:auto}
   #toastWrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;
     display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:none;width:min(560px,92vw)}
@@ -271,7 +272,7 @@
   .unlinked li .tip{display:block;margin-top:2px;color:#8a3b33;font-size:11.5px;line-height:1.55}
   .unlinked li::before{content:none}
 
-  header .tutbtn{margin-left:10px;border:1px solid var(--rule);background:#fff;color:var(--ink);border-radius:999px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit}
+  header .tutbtn{margin-left:auto;border:1px solid var(--rule);background:#fff;color:var(--ink);border-radius:999px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit}
   header .tutbtn:hover{background:var(--rule-soft)}
   /* ===== チュートリアル（本番画面のまま誘導）===== */
   #coach{position:fixed;inset:0;z-index:70;display:none;pointer-events:none}
@@ -312,11 +313,6 @@
   <div>
     <h1>関連図</h1>
     <div class="sub">情報を置き、つながりを判断し、全体像から看護課題を導く</div>
-  </div>
-  <div class="phase">
-    <span class="on" id="ph-input">① 情報入力</span>
-    <span id="ph-link">② つながりの吟味</span>
-    <span id="ph-reflect">③ 課題の導出</span>
   </div>
   <button class="tutbtn" id="tutBtn" type="button">❓ 使い方（チュートリアル）</button>
 </header>
@@ -395,13 +391,13 @@
 
   <section class="panel stage" style="padding:0">
     <div id="stageTop">
-      <div id="phaseGuide"></div>
       <div class="toolbar">
         <span class="astate" id="autosaveState">自動保存：準備中</span>
         <span class="astate" id="fileState" style="display:none"></span>
         <button id="saveBtn" class="print">💾 保存</button>
         <button id="saveAsBtn" style="display:none" title="別のファイルとして保存します">別名で保存</button>
         <button id="openBtn">📁 開く</button>
+        <span class="zoomgrp"><button id="zoomOut" title="縮小（−）">－</button><button id="zoomPct" title="100%に戻す">100%</button><button id="zoomIn" title="拡大（＋）">＋</button></span>
         <button id="fitBtn">全体表示</button>
         <button id="reviewBtn" class="print">🔎 ふりかえる</button>
         <button id="printBtn" class="print">🖶 印刷 / PDF</button>
@@ -423,6 +419,7 @@
       左のパネルから、まず患者情報を置き、続けて情報・看護診断・看護ケアを置いてみましょう。
     </div>
     <div class="legend">
+      <button type="button" class="lgtoggle" id="lgToggle" title="凡例をたたむ／ひらく">凡例 ▾</button>
       <span><span class="sw" style="background:var(--patient)"></span>患者情報</span>
       <span><span class="sw" style="background:var(--info)"></span>情報（主観・客観データ付き）</span>
       <span><span class="sw diag"></span>看護診断（二重枠）</span>
@@ -557,7 +554,7 @@ const CY_STYLE=[
     { selector:'edge:selected', style:{'line-color':'#23201b','target-arrow-color':'#23201b','width':3}}
 ];
 const cy = cytoscape({
-  container:document.getElementById('cy'), minZoom:.35,maxZoom:2.5,
+  container:document.getElementById('cy'), minZoom:.2,maxZoom:2.5, wheelSensitivity:.2,   // ホイール1回の拡大縮小を小さく
   style:CY_STYLE,
   layout:{name:'preset'}
 });
@@ -1047,6 +1044,22 @@ function patientLabel(name,age,disease){
   L.push('病名: '+(disease||'―'));
   return L.join('\n');
 }
+/* 新しいノードの置き場所：いま見えている範囲の左上から順に、他のノードと重ならない所を探す
+   （上の帯＝ツールバーと、下の凡例に隠れない範囲で） */
+function freeSpotInView(){
+  const box=document.getElementById('cy'), r=box.getBoundingClientRect(), z=cy.zoom(), pan=cy.pan();
+  const top=Math.max(0,document.getElementById('stageTop').getBoundingClientRect().bottom-r.top)+12;
+  const lg=document.querySelector('.legend'), bot=lg?Math.max(0,r.bottom-lg.getBoundingClientRect().top)+12:20;
+  const toModel=(x,y)=>({x:(x-pan.x)/z,y:(y-pan.y)/z});
+  const a=toModel(24,top), b=toModel(box.clientWidth-24,box.clientHeight-bot);
+  const W=190, H=70, GX=W+30, GY=H+24;
+  const boxes=cy.nodes().map(n=>n.boundingBox());
+  const hit=(x,y)=>boxes.some(q=>x+W/2+12>q.x1&&x-W/2-12<q.x2&&y+H/2+12>q.y1&&y-H/2-12<q.y2);
+  for(let y=a.y+H/2; y+H/2<=Math.max(b.y,a.y+H); y+=GY)
+    for(let x=a.x+W/2; x+W/2<=Math.max(b.x,a.x+W); x+=GX)
+      if(!hit(x,y)) return {x,y};
+  return {x:a.x+W/2+Math.random()*40, y:a.y+H/2+Math.random()*40};   // 空きがなければ左上付近
+}
 function addNode(type,payload,opts){
   const id='n'+(++nodeSeq), m=TYPE_META[type];
   let base,label,extra={};
@@ -1066,7 +1079,7 @@ function addNode(type,payload,opts){
   }else if(type==='info'){
     base=payload.text; label=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))};
   }else{ base=payload.text; label=payload.text; }
-  const pos=(opts&&opts.pos)||{x:120+Math.random()*260,y:90+Math.random()*240};
+  const pos=(opts&&opts.pos)||freeSpotInView();
   cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},position:pos});
   if(type==='diagnosis'){ diagnosisOrder.push(id); relabelDiagnoses(); renderDiagnoses(); }
   log('add_node',{id,type,carekind:extra.carekind,stype:extra.stype,supp:extra.supp?extra.supp.length:undefined}); refresh();
@@ -1216,7 +1229,6 @@ function addEdge(s,t,{potential=false}={}){
   cy.add({group:'edges',data:{id:'e_'+s+'_'+t,source:s,target:t,actual:!potential},classes:potential?'potential':''});
   log('add_edge',{source:s,target:t,potential});
   coachEvent('edge_added',{source:s,target:t});
-  if(cy.edges().length && document.getElementById('ph-input').classList.contains('on')) setPhase('link');
   refresh(); scheduleSpread();
   return true;
 }
@@ -1569,23 +1581,36 @@ function refresh(){
   renderGauge();        // A: PESの作法 達成度
   scheduleSpread();     // ラベルの大きさが変わったら線の折れ点も計算し直す
 }
-const PHASE_GUIDE={
-  input:{step:'STEP 1 ／ アセスメント', html:'まず <b>患者情報</b> を置き、続けて <b>情報（主観・客観データ付き）・看護診断（P）・看護ケア（OP/TP/EP）</b> を置きましょう。'},
-  link:{step:'STEP 2 ／ 関連づけ', html:'ノードを2つ続けてクリック＝線を引く。<b>E（原因）→…→S（症状）→P（診断）</b>の向きで繋ぎ（リスク型・目標指向型の診断は <b>E→P</b>）、看護ケアは<b>看護ケア ➔ 働きかけるE</b>（二重線）。原因と症状の間の「途中の変化」を省略せず挟みましょう。目標を置いたら、<b>強み・資源 ➔ 目標</b>（支える）、<b>危険因子 ➔ 目標</b>（脅かす）。'},
-  reflect:{step:'STEP 3 ／ 看護診断・看護計画の点検', html:'右で <b>各Pが S（症状）に、SがE（原因の連鎖）に支えられ、介入するEに看護計画（OP/TP/EP）がある</b> かを点検し、優先順位（＃）を整えて、図を完成させましょう。'}
-};
-function setPhase(p){
-  ['input','link','reflect'].forEach(x=>document.getElementById('ph-'+x).classList.toggle('on',x===p));
-  const g=PHASE_GUIDE[p]; const el=document.getElementById('phaseGuide');
-  if(g){ el.innerHTML=`<span class="step">${g.step}</span>${g.html}`; el.style.display='block'; }
-}
-/* フェーズタブを能動的に切替可能に */
-[['ph-input','input'],['ph-link','link'],['ph-reflect','reflect']].forEach(([id,p])=>{
-  document.getElementById(id).addEventListener('click',()=>{ setPhase(p); log('phase_click',{phase:p}); });
-});
+/* STEP 1〜3 の案内とフェーズ切替は廃止（キャンバス上でノードを隠すため）。呼び出し側のために空の関数を残す */
+function setPhase(p){}
 
 /* ---- ツールバー ---- */
 document.getElementById('fitBtn').onclick=fitView;
+/* 凡例のたたみ／ひらき（この端末のブラウザに覚えておく） */
+(()=>{ const lg=document.querySelector('.legend'), bt=document.getElementById('lgToggle');
+  const set=m=>{ lg.classList.toggle('min',m); bt.textContent=m?'凡例 ▸':'凡例 ▾'; };
+  try{ set(localStorage.getItem('kanrenzu-legend-min')==='1'); }catch(e){}
+  bt.onclick=()=>{ const m=!lg.classList.contains('min'); set(m); try{ localStorage.setItem('kanrenzu-legend-min',m?'1':'0'); }catch(e){} };
+})();
+/* 拡大縮小：ボタン1回で約1.15倍。画面の中心を基準にする。現在の倍率を表示 */
+function zoomBy(f){
+  const box=document.getElementById('cy'), c={x:box.clientWidth/2,y:box.clientHeight/2};
+  const z=Math.max(cy.minZoom(),Math.min(cy.maxZoom(),cy.zoom()*f));
+  cy.zoom({level:z,renderedPosition:c});
+}
+function zoomTo100(){ const box=document.getElementById('cy'); cy.zoom({level:1,renderedPosition:{x:box.clientWidth/2,y:box.clientHeight/2}}); }
+document.getElementById('zoomIn').onclick=()=>zoomBy(1.15);
+document.getElementById('zoomOut').onclick=()=>zoomBy(1/1.15);
+document.getElementById('zoomPct').onclick=zoomTo100;
+cy.on('zoom',()=>{ document.getElementById('zoomPct').textContent=Math.round(cy.zoom()*100)+'%'; });
+/* キーボード：＋／−で拡大縮小、0で100%（入力欄で文字を打っているときは反応しない） */
+document.addEventListener('keydown',e=>{
+  if(tutActive||e.ctrlKey||e.metaKey||e.altKey) return;
+  const t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
+  if(e.key==='+'||e.key===';'||e.key==='='){ zoomBy(1.15); e.preventDefault(); }
+  else if(e.key==='-'){ zoomBy(1/1.15); e.preventDefault(); }
+  else if(e.key==='0'){ zoomTo100(); e.preventDefault(); }
+});
 /* ============================================================
    再配置（関連図の意味に沿った、毎回同じ結果になる並べ方）
    ・左→右に 患者情報 | E(n) … E2 | E1 | S | 看護診断 の列
@@ -2039,7 +2064,7 @@ function coachStart(){
   closeSupp(); hideCtx();
   document.querySelectorAll('#toastWrap .toast .x').forEach(x=>x.click());
   COACH.snap=serialize();
-  COACH.phase=['input','link','reflect'].find(x=>document.getElementById('ph-'+x).classList.contains('on'))||'input';
+  COACH.phase='input';
   interactionLog.push({t:Date.now(),action:'tutorial_start'});
   document.body.classList.add('coaching');
   tutActive=true; COACH.active=true; COACH.idx=0; COACH.done=false; COACH.ids={}; COACH.completed=false;
