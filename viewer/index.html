@@ -154,7 +154,7 @@ const NTYPE={patient:['患者情報','--patient'],info:['情報','--info'],speec
 const BLOCK={source_is_diagnosis:'看護診断から矢印を出そうとした',target_is_patient:'患者情報へ矢印を入れようとした',
   target_is_care:'原因 ➔ 看護ケア の向きで結ぼうとした',care_to_non_info:'看護ケアを原因・症状以外へ結ぼうとした',
   no_patient:'患者情報より先に他の情報を置こうとした',source_is_goal:'目標から矢印を出そうとした',
-  target_is_strength:'強み・資源へ矢印を入れようとした',strength_to_non_goal:'強み・資源を目標以外へ結ぼうとした'};
+  target_is_strength:'強み・資源へ矢印を入れようとした',strength_to_non_goal:'強み・資源を目標指向型の診断以外へ結ぼうとした'};
 const blockLabel=r=>BLOCK[r]||('作法の通知（'+r+'）');
 // 操作の分類（タイムラインの段と色）
 const CAT={node:{label:'情報を置く',color:'#2f7d8c',row:0},edge:{label:'線を引く',color:'#5a5449',row:1},
@@ -338,6 +338,9 @@ function describe(a,e){
     case 'toggle_edge': return ['実線／点線の切替',edgeParts(e.id)];
     case 'reorder_diagnosis': return ['診断の並べ替え',(e.order||[]).map((id,i)=>'#'+(i+1)+' '+N(id)).join('、')];
     case 'goal_edge_kind': return ['支える/脅かす の自動判定',`${edgeParts(e.id)} を <b>${e.kind==='support'?'支える':e.kind==='threaten'?'脅かす':esc(e.kind)}</b> と判定`];
+    case 'goal_edge_role': return ['根拠／脅かす の切替',`${edgeParts(e.id)} を <b>${e.mode==='evidence'?'根拠（S）':'脅かす'}</b> に切替`];
+    case 'edit_pgoal': return ['対象者の目標を編集',''];
+    case 'edit_aim': return ['本人が目指す姿を編集',N(e.id)];
     case 'pes_role': return ['E/S の自動判定',`${edgeParts(e.id)} を <b>${esc(e.pes)}</b> と判定`];
     case 'phase_click': return ['画面の切替',esc({input:'① 情報入力',link:'② つながりの吟味',reflect:'③ 課題の導出'}[e.phase]||e.phase)];
     case 'open_review': return ['ふりかえりを開く',''];
