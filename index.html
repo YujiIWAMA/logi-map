@@ -142,6 +142,10 @@
   .care-item .k.on{background:var(--care);color:#fff}
   .care-item .miss{color:var(--accent);font-size:11px;margin-top:3px}
   .care-item .okmsg{color:var(--data);font-size:11px;margin-top:3px}
+  .focusable{cursor:pointer;transition:box-shadow .15s,background .15s}
+  .focusable:hover{box-shadow:0 0 0 2px rgba(232,163,61,.55)}
+  .focusable.on{box-shadow:0 0 0 2px #e8a33d;background:#fff8ec}
+  .focus-hint{font-size:11px;color:var(--ink-soft);margin:-2px 0 8px}
   .care-alert{background:#f6e6e4;border:1px solid #e3c4c0;border-radius:7px;padding:9px 10px;margin-bottom:9px;
     font-size:12px;color:#7a2e28;line-height:1.5}
 
@@ -397,6 +401,7 @@
       <div class="toolbar">
         <span class="astate" id="autosaveState">自動保存：準備中</span>
         <span class="astate" id="fileState" style="display:none"></span>
+        <button id="newBtn" title="新しい白紙のシートで描き始めます">📄 新規</button>
         <button id="saveBtn" class="print">💾 保存</button>
         <button id="saveAsBtn" style="display:none" title="別のファイルとして保存します">別名で保存</button>
         <button id="openBtn">📁 開く</button>
@@ -404,6 +409,7 @@
         <button id="fitBtn">全体表示</button>
         <button id="reviewBtn" class="print">🔎 ふりかえる</button>
         <button id="printBtn" class="print">🖶 印刷 / PDF</button>
+        <button id="pptxBtn" title="PowerPoint（.pptx）で編集できる形で書き出します">📊 PPT</button>
       </div>
     </div>
     <input type="file" id="openFile" accept="application/json,.json" style="display:none">
@@ -457,6 +463,7 @@
 
     <div class="divider"></div>
     <div class="eyebrow">看護計画の点検（介入するEに看護計画）</div>
+    <div class="focus-hint">枠をクリックすると、図の該当箇所が光ります</div>
     <div id="careArea">
       <div class="hint">原因（E）の連鎖のうち、看護で働きかけられる段に看護計画（OP/TP/EP）を立てます。看護ケアを置き、看護ケア ➔ 働きかける原因（二重線）で繋ぐと、ここで点検できます。</div>
     </div>
@@ -514,7 +521,9 @@ const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(
 let currentType='patient', nodeSeq=0, diagnosisOrder=[];
 const interactionLog=[];
 let tutActive=false;   // チュートリアル中は、作図ログ・自動保存に書き込まない
-function log(a,p){ if(tutActive) return; interactionLog.push({t:Date.now(),action:a,...p}); scheduleAutosave(); }
+let dirty=false;   // 最後にファイルへ保存してから、図に変更があるか（「新規」で確認に使う）
+const NO_CHANGE_ACTIONS=new Set(['panel_focus','export_pptx','save_json','load_json','export_print','open_review','phase_click','resume_autosave','new_sheet','print_blocked_missing_care']);
+function log(a,p){ if(tutActive) return; interactionLog.push({t:Date.now(),action:a,...p}); if(!NO_CHANGE_ACTIONS.has(a)) dirty=true; scheduleAutosave(); }
 
 /* ---- Cytoscape ---- */
 /* 本画面とチュートリアルで共用するスタイル */
@@ -533,6 +542,9 @@ const CY_STYLE=[
     { selector:'node.needcare', style:{'border-color':'#9a3b34','border-width':3}},
     { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
     { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
+    { selector:'.faded', style:{'opacity':.14}},
+    { selector:'node.focus', style:{'underlay-color':'#e8a33d','underlay-opacity':.35,'underlay-padding':9,'underlay-shape':'round-rectangle','border-color':'#e8a33d','border-width':3}},
+    { selector:'node.focusmiss', style:{'underlay-color':'#c0392b','underlay-opacity':.28,'underlay-padding':9,'underlay-shape':'round-rectangle','border-color':'#c0392b','border-width':3}},
     { selector:'node.hl', style:{'underlay-color':'#e8a33d','underlay-opacity':.4,'underlay-padding':8,'underlay-shape':'round-rectangle','border-color':'#e8a33d','border-width':3}},
     { selector:'node.hl.hlb', style:{'underlay-opacity':.25,'underlay-padding':12}},
     { selector:'node:selected', style:{'border-color':'#23201b','border-width':3}},
@@ -551,6 +563,7 @@ const CY_STYLE=[
     { selector:'edge[kind="support"]', style:{'line-color':'#4f7d2b','target-arrow-color':'#4f7d2b','target-arrow-shape':'triangle','width':2.5}},
     { selector:'edge[kind="threaten"]', style:{'line-color':'#b23a48','target-arrow-color':'#b23a48','target-arrow-shape':'tee','arrow-scale':1.5,'width':2.5}},
     { selector:'edge.potential', style:{'line-style':'dashed'}},
+    { selector:'edge.focus, edge.focusmiss', style:{'width':4,'z-index':20}},
     { selector:'edge:selected', style:{'line-color':'#23201b','target-arrow-color':'#23201b','width':3}}
 ];
 const cy = cytoscape({
@@ -886,8 +899,9 @@ cy.on('tap','node',evt=>{
   else if(linkSource&&linkSource.id()===n.id()){ linkSource=null; }
   else linkSource=n;
 });
+cy.on('dragfree','node',()=>{ if(!tutActive) dirty=true; });
 cy.on('tap','edge',evt=>{ if(tutActive) return; const e=evt.target; e.toggleClass('potential'); e.data('actual',!e.hasClass('potential')); log('toggle_edge',{id:e.id()}); });
-cy.on('tap',evt=>{ if(evt.target===cy){ linkSource=null; hideCtx(); } });
+cy.on('tap',evt=>{ if(evt.target===cy){ linkSource=null; hideCtx(); clearFocus(); } });
 
 /* ============================================================
    右クリック（cxttap）メニュー: 矢印の削除・切替、ノード削除
@@ -1402,6 +1416,7 @@ function renderDiagnoses(){
   diagnosisOrder.forEach((id,i)=>{
     const n=cy.getElementById(id);
     const item=document.createElement('div');   // 行 + PES集計 をまとめる
+    item.className='focusable'; item.dataset.focus=focusIdsForDiagnosis(n).join(','); item.dataset.kind='diagnosis'; item.title='クリックで図の該当箇所を表示'; item.style.borderRadius='8px';
     const row=document.createElement('div'); row.className='diagrow';
     row.innerHTML=`<span class="pri">#${i+1}</span><span class="txt">${esc(n.data('base'))} <span style="font-size:10.5px;color:var(--ink-soft)">〔${DX_TYPES[dxTypeOf(n)].name}〕</span></span>
       <span class="mv"><button class="up" ${i===0?'disabled':''}>▲</button><button class="down" ${i===diagnosisOrder.length-1?'disabled':''}>▼</button></span>`;
@@ -1455,6 +1470,65 @@ function moveDiag(i,d){ const j=i+d; if(j<0||j>=diagnosisOrder.length)return;
 
 /* ---- 看護計画の点検（連鎖ごとに、看護計画があるか）---- */
 const CARE_KINDS=['OP','TP','EP'];
+/* ============================================================
+   右パネルの枠 ⇔ 図の該当箇所
+   ・点検パネルの枠（連鎖・看護診断・未接続の情報）をクリックすると、
+     図の該当するノードと線だけを光らせ、ほかを薄くして、その範囲へ移動する
+   ・もう一度クリック／図の何もない所をクリック／Esc／図の変更 で元に戻る
+   ============================================================ */
+let focusKey=null;
+function focusIdsForChain(root){
+  const chain=chainNodes(root,cy), set=new Set(chain.map(n=>n.id()));
+  chain.forEach(n=>{
+    n.incomers('edge').sources().filter(x=>x.data('ntype')==='care').forEach(c=>set.add(c.id()));
+    n.outgoers('edge').targets().filter(x=>x.data('ntype')==='diagnosis').forEach(d=>set.add(d.id()));
+  });
+  return [...set];
+}
+function focusIdsForDiagnosis(d){
+  const set=new Set([d.id()]), q=[d];
+  while(q.length){ const n=q.shift();
+    n.incomers('edge').sources().forEach(s=>{ if(set.has(s.id())) return;
+      const t=s.data('ntype');
+      if(isInfoNode(s)||t==='patient'){ set.add(s.id()); q.push(s); }
+      else if(t==='care'||t==='strength'){ set.add(s.id()); } }); }
+  return [...set];
+}
+const hopLayers=()=>document.querySelectorAll('#cy > svg[aria-hidden="true"]');
+function clearFocus(){
+  if(!focusKey) return;
+  cy.elements().removeClass('faded focus focusmiss');
+  hopLayers().forEach(x=>x.style.opacity='');
+  document.querySelectorAll('.focusable.on').forEach(x=>x.classList.remove('on'));
+  focusKey=null;
+}
+function focusOn(ids,el,miss,kind){
+  const key=kind+':'+ids.join(',');
+  if(focusKey===key){ clearFocus(); return; }
+  clearFocus();
+  const set=cy.collection(); ids.forEach(id=>{ const n=cy.getElementById(id); if(n.nonempty()) set.merge(n); });
+  if(!set.length) return;
+  focusKey=key;
+  const eles=set.union(set.edgesWith(set));
+  cy.elements().addClass('faded'); eles.removeClass('faded').addClass(miss?'focusmiss':'focus');
+  hopLayers().forEach(x=>x.style.opacity='.2');
+  el.classList.add('on');
+  // 該当範囲が見えるよう移動（上のツールバー・下の凡例に隠れない範囲へ）
+  const box=document.getElementById('cy'), W=box.clientWidth, H=box.clientHeight, r=box.getBoundingClientRect();
+  const topBand=Math.max(0,document.getElementById('stageTop').getBoundingClientRect().bottom-r.top)+16;
+  const lg=document.querySelector('.legend'), botBand=lg?Math.max(0,r.bottom-lg.getBoundingClientRect().top)+12:20;
+  const bb=eles.boundingBox({includeLabels:true}), pad=40, aw=W-2*pad, ah=Math.max(120,H-topBand-botBand);
+  const z=Math.max(cy.minZoom(),Math.min(1.2,aw/bb.w,ah/bb.h));
+  cy.animate({zoom:z,pan:{x:pad+(aw-z*bb.w)/2-z*bb.x1,y:topBand+(ah-z*bb.h)/2-z*bb.y1}},{duration:350});
+  log('panel_focus',{kind,n:set.length});
+}
+document.querySelector('.panel.right').addEventListener('click',e=>{
+  if(e.target.closest('button')) return;                 // 並べ替え（▲▼）などのボタンは対象外
+  const el=e.target.closest('.focusable'); if(!el||!el.dataset.focus) return;
+  focusOn(el.dataset.focus.split(',').filter(Boolean),el,el.dataset.miss==='1',el.dataset.kind||'');
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&focusKey&&!tutActive) clearFocus(); });
+
 function renderCare(){
   const area=document.getElementById('careArea');
   const info=analyzePES(cy), roots=chainRoots(cy).sort((a,b)=>info[b.id()].level-info[a.id()].level);
@@ -1465,13 +1539,14 @@ function renderCare(){
   const missing=uncoveredRoots(cy);
   let html=`<div class="hint" style="margin-bottom:8px"><b>考え方：</b><b>Eに対して介入を考える</b>のが看護ケアの考え方です。Eを細かく分解すると、その分、看護ケアの内容もより細かく、具体的にできます。Eを分解したら、「これは看護で予防や対策ができるものかな？」と一つ一つ考えましょう。</div>`;
   if(missing.length){
-    html+=`<div class="care-alert">⚠ <b>看護計画のない連鎖が ${missing.length} 件</b>あります。看護で介入するEを選び、看護ケア ➔ そのE で繋いでください。</div>`;
+    const mids=[...new Set(missing.map(r=>focusIdsForChain(r)).flat())];
+    html+=`<div class="care-alert focusable" data-focus="${mids.join(',')}" data-kind="care_alert" data-miss="1" title="クリックで図の該当箇所を表示">⚠ <b>看護計画のない連鎖が ${missing.length} 件</b>あります。看護で介入するEを選び、看護ケア ➔ そのE で繋いでください。</div>`;
   }
   roots.forEach(r=>{
     const chain=chainNodes(r,cy), hit=chain.filter(n=>careOf(n).length>0);
     const tag=n=>{ const x=info[n.id()]; return x.role==='S'?'S':'E'+x.level; };
     const path=chain.map(n=>`<span class="etag">${tag(n)}</span>${esc(n.data('base'))}`).join(' ➔ ');
-    html+=`<div class="care-item">
+    html+=`<div class="care-item focusable" data-focus="${focusIdsForChain(r).join(',')}" data-kind="care_chain" ${hit.length?'':'data-miss="1"'} title="クリックで図の該当箇所を表示">
       <div class="en">${path}</div>
       ${hit.length?hit.map(n=>`<div class="okmsg">✓ 介入するE：${esc(n.data('base'))}（${careOf(n).join('・')}）</div>`).join('')
                   :'<div class="miss">この連鎖にはまだ看護計画がありません → 看護で介入するEを選び、看護ケア ➔ そのE で繋ぎましょう</div>'}
@@ -1603,6 +1678,7 @@ function unlinkedTip(ntype){
 }
 
 function refresh(){
+  clearFocus();
   document.getElementById('cNodes').textContent=cy.nodes().length;
   document.getElementById('cEdges').textContent=cy.edges().length;
   document.getElementById('emptyHint').style.display=cy.nodes().length?'none':'block';
@@ -1613,7 +1689,7 @@ function refresh(){
   if(unlinked.length){ box.style.display='block';
     document.getElementById('unlinkedList').innerHTML=unlinked.map(n=>{
       const nm=esc(n.data('base'));
-      return `<li><span class="nm">${nm}</span><span class="tip">${unlinkedTip(n.data('ntype'))}</span></li>`;
+      return `<li class="focusable" data-focus="${n.id()}" data-kind="unlinked" data-miss="1" title="クリックで図の該当箇所を表示"><span class="nm">${nm}</span><span class="tip">${unlinkedTip(n.data('ntype'))}</span></li>`;
     }).join(''); }
   else box.style.display='none';
   syncPatientLock();
@@ -1802,28 +1878,48 @@ function downloadJson(){
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 async function saveDiagram(asNew){
-  if(cy.nodes().length===0){ alert('保存する図がありません。'); return; }
-  if(!CAN_PICK){ downloadJson(); return; }
+  if(cy.nodes().length===0){ alert('保存する図がありません。'); return false; }
+  if(!CAN_PICK){ downloadJson(); dirty=false; return true; }
   try{
-    if(fileHandle && !asNew){ await writeTo(fileHandle); flashFileState('✓ 上書き保存しました：'+fileHandle.name); return; }
+    if(fileHandle && !asNew){ await writeTo(fileHandle); dirty=false; flashFileState('✓ 上書き保存しました：'+fileHandle.name); return true; }
     const p=cy.nodes('[ntype="patient"]')[0];
     const nm=(p&&p.data('pname')?p.data('pname').replace(/\s+/g,''):'')||'';
     const h=await window.showSaveFilePicker({suggestedName:`関連図${nm?'_'+nm:''}.json`,types:JSON_TYPES});
-    await writeTo(h); fileHandle=h; flashFileState('✓ 保存しました：'+h.name);
+    await writeTo(h); fileHandle=h; dirty=false; flashFileState('✓ 保存しました：'+h.name); return true;
   }catch(e){
-    if(e&&e.name==='AbortError') return;                       // 保存先の選択を取り消した
-    alert('保存できませんでした（'+(e&&e.message||e)+'）。ダウンロードで保存します。'); downloadJson();
+    if(e&&e.name==='AbortError') return false;                 // 保存先の選択を取り消した
+    alert('保存できませんでした（'+(e&&e.message||e)+'）。ダウンロードで保存します。'); downloadJson(); dirty=false; return true;
   }
 }
 document.getElementById('saveBtn').onclick=()=>saveDiagram(false);
 document.getElementById('saveAsBtn').onclick=()=>saveDiagram(true);
+/* 新規シート：保存していない変更があれば、先に保存するかを確認してから白紙にする */
+async function newSheet(){
+  if(tutActive) return;
+  if(cy.nodes().length){
+    if(dirty){
+      if(confirm('保存していない変更があります。\n保存してから新しいシートにしますか？\n\n［OK］保存してから新規　［キャンセル］保存しないで進む')){
+        const ok=await saveDiagram(false); if(!ok) return;
+      }else if(!confirm('保存せずに新しいシートにします。いまの図は消えます。よろしいですか？')) return;
+    }else if(!confirm('新しいシートにします。いまの図は画面から消えます（保存済みのファイルは残ります）。よろしいですか？')) return;
+  }
+  hideCtx(); closeSupp();
+  cy.elements().remove(); diagnosisOrder=[]; nodeSeq=0; linkSource=null;
+  interactionLog.length=0;                       // 新しいシートの作図ログは、ここから始まる
+  fileHandle=null; dirty=false; setFileState();
+  cClearForms(); cResetCareKind(); setDxSeg('actual'); selectType('patient'); refresh(); renderDiagnoses();
+  log('new_sheet',{});
+  if(!pendingResume){ try{ localStorage.removeItem(AUTOSAVE_KEY); }catch(e){} }   // 再開の選択待ちの途中保存は勝手に消さない
+  setAutosaveState(autosaveEnabled?'自動保存：オン':'自動保存：準備中');
+}
+document.getElementById('newBtn').onclick=newSheet;
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&!tutActive){ e.preventDefault(); saveDiagram(false); } });
 
 function openParsed(text,handle){
   let d; try{ d=JSON.parse(text); }catch(e){ alert('ファイルを読み込めませんでした（JSON形式ではありません）。'); return; }
   if(!d||d.app!=='kanrenzu-workbench'||!Array.isArray(d.nodes)){ alert('この関連図ツールの保存ファイルではないようです。'); return; }
   if(cy.nodes().length && !confirm('現在の図を置き換えて読み込みます。よろしいですか？')) return;
-  loadData(d); fileHandle=handle||null; setFileState();
+  loadData(d); fileHandle=handle||null; dirty=false; setFileState();
 }
 document.getElementById('openBtn').onclick=async()=>{
   if(typeof window.showOpenFilePicker!=='function'){ document.getElementById('openFile').click(); return; }
@@ -2018,6 +2114,126 @@ document.getElementById('printBtn').onclick=()=>{
   w.document.write(html);
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); }; log('export_print',{nodes:cy.nodes().length,edges:cy.edges().length});
 };
+
+/* ============================================================
+   PowerPoint 書き出し（編集できる図形として）
+   ・ノード＝図形（文字はそのまま編集可）、矢印＝画面と同じ縦横の線分（最後の線分に矢じり）
+   ・看護診断は二重枠（外枠＋内枠）、看護ケアの線は二重線（太い紫線＋細い白線）
+   ・支える＝緑の三角矢じり、脅かす＝赤の横棒（画面と同じ区別）
+   ・1スライド目＝図、2スライド目＝看護診断の優先順位と看護計画の一覧
+   ・ライブラリ（PptxGenJS）は、ボタンを押したときだけ読み込む
+   ============================================================ */
+const PPTX_SRC=['https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js'];
+function loadPptxLib(){
+  if(window.PptxGenJS) return Promise.resolve();
+  return PPTX_SRC.reduce((p,src)=>p.catch(()=>new Promise((ok,ng)=>{
+    const sc=document.createElement('script'); sc.src=src; sc.onload=()=>window.PptxGenJS?ok():ng(); sc.onerror=ng; document.head.appendChild(sc);
+  })), Promise.reject());
+}
+const pHex=c=>{ c=String(c||'#000000').trim(); const m=c.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)/); if(m) return [m[1],m[2],m[3]].map(v=>(+v).toString(16).padStart(2,'0')).join('').toUpperCase(); return c.replace('#','').slice(0,6).toUpperCase(); };
+function buildPptx(){
+  ORouter.run(cy);
+  const routes=new Map(ORouter.routesOf(cy).map(r=>[r.e.id(),r.pts]));
+  // 標準の16:9スライド（13.33×7.5インチ）に収める。図が大きく文字が8pt未満になるときだけ、スライドを広げる
+  const bb=cy.elements().boundingBox({includeLabels:true});
+  const M=0.4, TOP=0.7, BOTTOM=0.6, KMIN=8/(13*72), KMAX=1.6/96;
+  let W=13.333, H=7.5;
+  let k=Math.min(KMAX,(W-2*M)/bb.w,(H-TOP-BOTTOM)/bb.h);
+  if(k<KMIN){ k=KMIN; W=Math.min(56,Math.max(W,bb.w*k+2*M)); H=Math.min(56,Math.max(H,bb.h*k+TOP+BOTTOM)); k=Math.min(k,(W-2*M)/bb.w,(H-TOP-BOTTOM)/bb.h); }
+  const ox=(W-bb.w*k)/2-bb.x1*k, oy=TOP+((H-TOP-BOTTOM)-bb.h*k)/2-bb.y1*k;
+  const X=x=>ox+x*k, Y=y=>oy+y*k, pt=px=>Math.max(6,px*k*72);
+  const FONT='Yu Gothic';
+  const pptx=new PptxGenJS();
+  pptx.defineLayout({name:'KANRENZU',width:W,height:H}); pptx.layout='KANRENZU';
+  pptx.title='関連図';
+  const sl=pptx.addSlide(); sl.background={color:'FFFFFF'};
+  const p=cy.nodes('[ntype="patient"]')[0];
+  sl.addText('関連図'+(p&&p.data('pname')?'（'+p.data('pname')+'）':''),{x:M,y:0.15,w:W-2*M,h:0.4,fontFace:FONT,fontSize:16,bold:true,color:'23201B'});
+  // --- 線（ノードの下に描く）---
+  cy.edges().forEach(e=>{
+    let pts=routes.get(e.id());
+    if(!pts||pts.length<2) pts=[e.sourceEndpoint(),...(e.segmentPoints()||[]),e.targetEndpoint()];
+    pts=pts.filter(q=>q&&isFinite(q.x)&&isFinite(q.y)); if(pts.length<2) return;
+    const kind=e.data('kind'), care=kind==='care', tee=kind==='threaten';
+    const color = care ? '7B5AA6' : pHex(e.style('line-color'));
+    const dash=e.hasClass('potential')?'dash':'solid';
+    const wPt=care?3.2:Math.max(1.5,(parseFloat(e.style('width'))||2)*0.9);
+    const seg=(a,b,line)=>{
+      const dx=b.x-a.x, dy=b.y-a.y; if(Math.abs(dx)<0.01&&Math.abs(dy)<0.01) return;
+      sl.addShape(pptx.ShapeType.line,{x:X(Math.min(a.x,b.x)),y:Y(Math.min(a.y,b.y)),w:Math.abs(dx)*k,h:Math.abs(dy)*k,flipH:dx<0,flipV:dy<0,line});
+    };
+    for(let i=1;i<pts.length;i++){
+      const last=i===pts.length-1;
+      seg(pts[i-1],pts[i],Object.assign({color,width:wPt,dashType:dash},last&&!tee?{endArrowType:'triangle'}:{}));
+    }
+    const a=pts[pts.length-2], b=pts[pts.length-1], L=Math.hypot(b.x-a.x,b.y-a.y)||1, ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
+    if(tee){   // 脅かす：先端に横棒
+      const h=7; seg({x:b.x-uy*h,y:b.y+ux*h},{x:b.x+uy*h,y:b.y-ux*h},{color,width:wPt+1,dashType:'solid'});
+    }
+    if(care){  // 二重線の内側（白）。矢じりにかからないよう、最後の線分は少し手前で止める
+      for(let i=1;i<pts.length;i++){ const s0=pts[i-1]; let s1=pts[i];
+        if(i===pts.length-1){ const cut=Math.min(10,L*0.5); s1={x:s1.x-ux*cut,y:s1.y-uy*cut}; }
+        seg(s0,s1,{color:'FFFFFF',width:1.1,dashType:'solid'}); }
+    }
+  });
+  // --- ノード ---
+  const pinfo=analyzePES(cy);
+  cy.nodes().forEach(n=>{
+    const t=n.data('ntype'), w=n.outerWidth(), h=n.outerHeight(), c=n.position();
+    const x=X(c.x-w/2), y=Y(c.y-h/2), ww=w*k, hh=h*k;
+    const fill=pHex(n.data('bg')||n.style('background-color')), border=pHex(n.data('border')||n.style('border-color'));
+    const txt={fontFace:FONT,fontSize:pt(parseFloat(n.style('font-size'))||13),color:'23201B',valign:'middle',margin:Math.max(1,6*k*72),
+      align:(t==='patient'||isInfoNode(n))?'left':'center',bold:t==='diagnosis'};
+    // PowerPoint では図形の幅で自動で折り返すので、画面用の強制改行は外す（意味のある改行だけ残す）
+    const pi=pinfo[n.id()], tg=pi?(pi.role==='S'?'S':'E'+pi.level)+': ':'';
+    const label = isInfoNode(n) ? [tg+n.data('base'),...(n.data('supp')||[]).map(s=>(s.k==='subj'?'主観：':'客観：')+s.t)].join('\n')
+                : t==='care' ? (n.data('carekind')||'')+': '+n.data('base')
+                : t==='strength' ? '〔'+(ST_TYPES[n.data('stype')]||'本人')+'〕'+n.data('base')
+                : String(n.data('label')||'');
+    const box={x,y,w:ww,h:hh,fill:{color:fill},line:{color:border,width:1.5}};
+    if(t==='diagnosis'){
+      sl.addShape(pptx.ShapeType.rect,{x,y,w:ww,h:hh,fill:{color:'FFFFFF'},line:{color:border,width:1.5}});
+      const g=4*k; sl.addText(label,{...txt,shape:pptx.ShapeType.rect,...box,x:x+g,y:y+g,w:ww-2*g,h:hh-2*g});
+    }else if(t==='care'){
+      sl.addText(label,{...txt,shape:pptx.ShapeType.homePlate,...box});
+    }else if(t==='strength'){
+      sl.addText(label,{...txt,shape:pptx.ShapeType.octagon,...box});
+    }else{
+      sl.addText(label,{...txt,shape:t==='patient'?pptx.ShapeType.rect:pptx.ShapeType.roundRect,rectRadius:0.06,...box});
+    }
+  });
+  // --- 凡例（画面の凡例の文言をそのまま使う）---
+  const lg=[...document.querySelectorAll('.legend > span')].map(s=>s.textContent.trim()).filter(Boolean).join('　／　');
+  if(lg) sl.addText(lg,{x:M,y:H-BOTTOM+0.05,w:W-2*M,h:BOTTOM-0.1,fontFace:FONT,fontSize:8.5,color:'6B6459',valign:'top'});
+  // --- 2枚目：一覧 ---
+  const tagOf=n=>{ const r=pinfo[n.id()]; return r?(r.role==='S'?'S':'E'+r.level):''; };
+  const rows=[];
+  if(diagnosisOrder.length){ rows.push({text:'看護診断の優先順位',options:{bold:true,fontSize:16,breakLine:true}});
+    diagnosisOrder.forEach((id,i)=>{ const d=cy.getElementById(id); if(d.nonempty()) rows.push({text:`#${i+1}　${d.data('base')}〔${DX_TYPES[dxTypeOf(d)].name}〕`,options:{fontSize:13,breakLine:true}}); });
+    rows.push({text:' ',options:{breakLine:true}}); }
+  const cares=cy.nodes('[ntype="care"]');
+  if(cares.length){ rows.push({text:'看護計画（OP/TP/EP）と、働きかける原因',options:{bold:true,fontSize:16,breakLine:true}});
+    cares.forEach(n=>{ const tgs=n.outgoers('edge').targets().filter(isInfoNode).map(t=>tagOf(t)+' '+t.data('base')).join('、')||'（働きかける原因が未設定）';
+      rows.push({text:`${n.data('carekind')||''}　${n.data('base')}　— 対象：${tgs}`,options:{fontSize:13,breakLine:true}}); }); }
+  if(rows.length){ const s2=pptx.addSlide(); s2.addText(rows,{x:M,y:0.5,w:W-2*M,h:H-1,fontFace:FONT,color:'23201B',valign:'top'}); }
+  return pptx;
+}
+async function exportPptx(){
+  if(cy.nodes().length===0){ alert('書き出す図がありません。'); return; }
+  const btn=document.getElementById('pptxBtn'), label=btn.textContent;
+  btn.disabled=true; btn.textContent='作成中…';
+  try{
+    await loadPptxLib();
+    const pptx=buildPptx();
+    const p=cy.nodes('[ntype="patient"]')[0], nm=p&&p.data('pname')?'_'+p.data('pname').replace(/\s+/g,''):'';
+    await pptx.writeFile({fileName:`関連図${nm}.pptx`});
+    log('export_pptx',{nodes:cy.nodes().length,edges:cy.edges().length});
+  }catch(e){
+    alert('PowerPoint ファイルを作れませんでした。インターネットに接続されているか確認してください。'+(e&&e.message?'\n（'+e.message+'）':''));
+  }finally{ btn.disabled=false; btn.textContent=label; }
+}
+document.getElementById('pptxBtn').onclick=exportPptx;
 
 window.addEventListener('load',()=>{ document.getElementById('nodeText').focus(); setPhase('input'); initAutosave(); });
 
