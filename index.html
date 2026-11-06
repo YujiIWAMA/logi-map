@@ -400,7 +400,6 @@
       <input type="text" id="pName" placeholder="氏名（例: 山田 太郎）">
       <input type="text" id="pAge" placeholder="年齢（例: 72）">
       <input type="text" id="pDisease" placeholder="病名（例: 2型糖尿病）">
-      <input type="text" id="pGoal" placeholder="対象者の目標（例: 自宅で妻と暮らし続ける）">
     </div>
 
     <button class="addbtn" id="addNode">＋ 図に置く</button>
@@ -572,7 +571,7 @@ const CY_STYLE=[
     { selector:'node[ntype="ltgoal"]', style:{'shape':'round-rectangle','padding':'14px'}},
     { selector:'node[ntype="stgoal"]', style:{'shape':'rectangle','padding':'12px'}},
     /* 望み：雲形（SVGの雲を背景に描き、ノード自体の塗り・枠は消す） */
-    { selector:'node[ntype="hope"]', style:{'shape':'rectangle','background-opacity':0,'border-width':0,'padding':'26px',
+    { selector:'node[ntype="hope"]', style:{'shape':'rectangle','background-opacity':0,'border-width':0,'padding':'32px','font-size':'14px',
         'background-image':CLOUD_SVG,'background-fit':'none','background-width':'100%','background-height':'100%','background-clip':'none','background-image-containment':'over','background-image-opacity':1}},
     { selector:'node[ntype="care"]', style:{'shape':'tag','border-width':2,'padding':'11px','font-size':'12px'}},
     { selector:'node[ntype="strength"]', style:{'shape':'cut-rectangle','padding':'12px','font-size':'12.5px'}},
@@ -1002,10 +1001,7 @@ cy.on('cxttap','node',evt=>{
     ctx.appendChild(sep());
   }
   if(n.data('ntype')==='patient'){
-    ctx.appendChild(mkbtn('対象者の目標を編集…',()=>{ hideCtx();
-      const v=prompt('対象者の目標（全体の、長期的な暮らしの目標）',n.data('pgoal')||''); if(v===null) return;
-      n.data('pgoal',v.trim()); n.data('label',patientLabel(n.data('pname'),n.data('page'),n.data('pdisease'),n.data('pgoal')));
-      log('edit_pgoal',{id:n.id()}); refresh(); }));
+
     ctx.appendChild(sep());
   }
   if(isGoalDx(n)){
@@ -1146,7 +1142,6 @@ function patientLabel(name,age,disease,goal){
   L.push('氏名: '+(name||'―'));
   L.push('年齢: '+(a||'―'));
   L.push('病名: '+(disease||'―'));
-  L.push(wrapJa('対象者の目標: '+(goal||'―'),16));
   return L.join('\n');
 }
 /* 新しいノードの置き場所：いま見えている範囲の左上から順に、他のノードと重ならない所を探す
@@ -1171,7 +1166,7 @@ function addNode(type,payload,opts){
   if(type==='patient'){
     base='患者情報'+(payload.name?`（${payload.name}）`:'');
     label=patientLabel(payload.name,payload.age,payload.disease,payload.goal);
-    extra={pname:payload.name,page:payload.age,pdisease:payload.disease,pgoal:payload.goal||''};
+    extra={pname:payload.name,page:payload.age,pdisease:payload.disease};
   }else if(type==='care'){
     base=payload.text; extra={carekind:payload.carekind};
     label=wrapJa(payload.carekind+': '+payload.text);   // OP:/TP:/EP: を頭に付与
@@ -1183,7 +1178,7 @@ function addNode(type,payload,opts){
   }else if(type==='info'){
     base=payload.text; label=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))};
     if(payload.isbg){ const c=BG_COLORS(); extra.isbg=true; extra.bg=c.bg; extra.border=c.border; }
-  }else if(STANDALONE_TYPES[type]){ base=payload.text; label=wrapJa(payload.text); }
+  }else if(STANDALONE_TYPES[type]){ base=payload.text; label=standaloneLabel(type,base); }
   else{ base=payload.text; label=payload.text; }
   const pos=(opts&&opts.pos)||freeSpotInView();
   cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},position:pos});   // extra.bg/border（背景）が優先
@@ -1205,9 +1200,9 @@ document.getElementById('addNode').addEventListener('click',()=>{
   if(currentType!=='patient' && cy.nodes('[ntype="patient"]').length===0){ blockAdd('no_patient'); return; }
   if(currentType==='patient'){
     if(cy.nodes('[ntype="patient"]').length>0) return;     // 患者情報は1つだけ
-    const name=pName.value.trim(),age=pAge.value.trim(),disease=pDisease.value.trim(),goal=pGoal.value.trim();
+    const name=pName.value.trim(),age=pAge.value.trim(),disease=pDisease.value.trim();
     if(!name&&!age&&!disease&&!goal) return;
-    addNode('patient',{name,age,disease,goal}); pName.value=pAge.value=pDisease.value=pGoal.value='';
+    addNode('patient',{name,age,disease}); pName.value=pAge.value=pDisease.value='';
   }else if(currentType==='care'){
     const ta=document.getElementById('careText'); const v=ta.value.trim(); if(!v) return;
     addNode('care',{text:v,carekind:careKind}); ta.value=''; ta.focus();
@@ -1357,6 +1352,7 @@ function addEdge(s,t,{potential=false}={}){
 /* 望み・長期目標・短期目標：図の中で独立して置く（矢印が出たり入ったりしない） */
 const STANDALONE_TYPES={hope:'望み',ltgoal:'長期目標',stgoal:'短期目標'};
 const isStandalone=n=>!!STANDALONE_TYPES[n.data('ntype')];
+const standaloneLabel=(t,base)=>wrapJa(STANDALONE_TYPES[t]+'：'+base);   // 例：「望み：最期まで自宅で過ごしたい」
 /* 背景（生活状況・生活歴）：全体像として置くが、E/S（PESの連鎖）には入れない。灰色の「関連」の線でつなぐ */
 const isBgNode=n=>n.data('ntype')==='info' && !!n.data('isbg');
 const isInfoNode=n=>{ const t=n.data('ntype'); return (t==='info'&&!n.data('isbg'))||t==='speech'||t==='data'; };
@@ -1921,7 +1917,7 @@ const SAVE_VERSION=1;
 function serialize(){
   const nodes=cy.nodes().map(n=>({
     data:{ id:n.id(), base:n.data('base'), ntype:n.data('ntype'),
-      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), pgoal:n.data('pgoal'), supp:n.data('supp'), isbg:n.data('isbg')||undefined, dxtype:n.data('dxtype'), aim:n.data('aim'), stype:n.data('stype') },
+      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), supp:n.data('supp'), isbg:n.data('isbg')||undefined, dxtype:n.data('dxtype'), aim:n.data('aim'), stype:n.data('stype') },
     position:{ x:n.position('x'), y:n.position('y') }
   }));
   const edges=cy.edges().map(e=>({
@@ -2018,7 +2014,7 @@ document.getElementById('openFile').addEventListener('change',ev=>{
 /* 図の内容を差し替える（ログには触れない。チュートリアルの退避/復元でも使う）*/
 /* 旧形式の「目標」ノードを変換する
    ・強み・資源や情報とつながっている目標 → 目標指向型の看護診断（名前を「本人が目指す姿」にも入れる）
-   ・どこにもつながっていない（患者情報とだけつながる）目標 → 患者情報の「対象者の目標」へ */
+   ・どこにもつながっていない（患者情報とだけつながる）目標 → 長期目標（独立）へ */
 function convertGoalNodes(d){
   const goals=(d.nodes||[]).filter(n=>n.data&&n.data.ntype==='goal'); if(!goals.length) return d;
   d=JSON.parse(JSON.stringify(d));
@@ -2028,23 +2024,32 @@ function convertGoalNodes(d){
     if(n.data.ntype!=='goal') return; const id=n.data.id;
     const linked=d.edges.some(e=>e.data.target===id && typeOf[e.data.source]!=='patient');
     if(linked){ n.data.ntype='diagnosis'; n.data.dxtype='goal'; n.data.aim=n.data.base; delete n.data.supp; order.push(id); }
-    else{ if(pat) pat.data.pgoal=[pat.data.pgoal,n.data.base].filter(Boolean).join('／'); drop.add(id); }
+    else{ n.data.ntype='ltgoal'; delete n.data.supp; }
   });
   d.nodes=d.nodes.filter(n=>!drop.has(n.data.id));
-  d.edges=d.edges.filter(e=>!drop.has(e.data.target)&&!drop.has(e.data.source)&&!(typeOf[e.data.target]==='goal'&&typeOf[e.data.source]==='patient'));
+  const nowType={}; d.nodes.forEach(n=>{ nowType[n.data.id]=n.data.ntype; });
+  d.edges=d.edges.filter(e=>!drop.has(e.data.target)&&!drop.has(e.data.source)&&nowType[e.data.target]!=='ltgoal'&&nowType[e.data.source]!=='ltgoal');
   d.diagnosisOrder=order;
   return d;
 }
+/* 患者情報に書かれていた「対象者の目標」（旧形式）は、長期目標ノードとして残す */
+function convertPatientGoal(d){
+  const pat=(d.nodes||[]).find(n=>n.data&&n.data.ntype==='patient'&&n.data.pgoal); if(!pat) return d;
+  d=JSON.parse(JSON.stringify(d)); const P=d.nodes.find(n=>n.data.id===pat.data.id);
+  const id='n'+((d.nodeSeq||d.nodes.length)+1); d.nodeSeq=(d.nodeSeq||d.nodes.length)+1;
+  d.nodes.push({data:{id,ntype:'ltgoal',base:P.data.pgoal},position:{x:P.position.x+260,y:P.position.y}});
+  delete P.data.pgoal; return d;
+}
 function applyData(d){
-  d=convertGoalNodes(d);
+  d=convertPatientGoal(convertGoalNodes(d));
   cy.elements().remove();
   const nodes=d.nodes.map(n=>{
     const m=TYPE_META[n.data.ntype]||TYPE_META.data;
     let label;
-    if(n.data.ntype==='patient') label=patientLabel(n.data.pname,n.data.page,n.data.pdisease,n.data.pgoal);
+    if(n.data.ntype==='patient') label=patientLabel(n.data.pname,n.data.page,n.data.pdisease);
     else if(n.data.ntype==='care') label=wrapJa((n.data.carekind||'OP')+': '+n.data.base);
     else if(n.data.ntype==='strength') label=strengthLabelText(n.data.base,n.data.stype);
-    else if(STANDALONE_TYPES[n.data.ntype]) label=wrapJa(n.data.base);
+    else if(STANDALONE_TYPES[n.data.ntype]) label=standaloneLabel(n.data.ntype,n.data.base);
     else label=n.data.base;
     const col = (n.data.ntype==='info'&&n.data.isbg) ? BG_COLORS() : {bg:cssVar(m.bgvar),border:m.border};
     return { group:'nodes', data:{ ...n.data, label, bg:col.bg, border:col.border }, position:n.position };
@@ -2274,7 +2279,7 @@ function buildPptx(){
                 : isInfoNode(n) ? [tg+n.data('base'),...(n.data('supp')||[]).map(s=>(s.k==='subj'?'主観：':'客観：')+s.t)].join('\n')
                 : t==='care' ? (n.data('carekind')||'')+': '+n.data('base')
                 : t==='strength' ? '〔'+(ST_TYPES[n.data('stype')]||'本人')+'〕'+n.data('base')
-                : STANDALONE_TYPES[t] ? n.data('base')
+                : STANDALONE_TYPES[t] ? STANDALONE_TYPES[t]+'：'+n.data('base')
                 : String(n.data('label')||'');
     const box={x,y,w:ww,h:hh,fill:{color:fill},line:{color:border,width:1.5}};
     if(t==='diagnosis'){
@@ -2345,7 +2350,7 @@ const cq=sel=>document.querySelector(sel);
 const COACH_POS={ p:{x:60,y:20}, e2:{x:60,y:200}, e1:{x:330,y:200}, s:{x:600,y:200}, d:{x:870,y:200}, c1:{x:225,y:380}, c2:{x:445,y:380} };
 const COACH_BOX={x1:-60,y1:-30,x2:980,y2:410};
 
-function cClearForms(){ [pName,pAge,pDisease,pGoal,nodeText,subjText,objText,careText,dxAim].forEach(x=>x.value=''); }
+function cClearForms(){ [pName,pAge,pDisease,nodeText,subjText,objText,careText,dxAim].forEach(x=>x.value=''); }
 function cResetCareKind(){ careKind='OP'; document.querySelectorAll('#careSeg button').forEach(x=>x.classList.toggle('on',x.dataset.c==='OP')); }
 const cCanvasRect=()=>{ const r=cq('#cy').getBoundingClientRect(), t=cq('#stageTop').getBoundingClientRect();
   return {left:r.left,top:Math.max(r.top,t.bottom+4),right:r.right,bottom:r.bottom,width:r.width,height:r.bottom-Math.max(r.top,t.bottom+4)}; };
@@ -2355,7 +2360,7 @@ const COACH_STEPS=[
  {kind:'read', title:'いっしょに1枚描いてみましょう',
   body:'この画面のまま、模擬患者さんの関連図を1枚描きます。<b>光っている所だけ</b>が押せます。入力は、例を見ながら<b>自分で</b>打ち込みます。<br><br><b>症例</b>：航空 太郎さん（90歳）。慢性心不全で入院中。心臓のはたらきが弱く、両下肢にむくみがあります。「足の裏が鈍くて、床を踏んでいる感じがしない」と話し、夜間はトイレまで歩いて行きます。<br><br>いまの図は一時的に退避され、終わると元に戻ります。いつでも「スキップ」できます。'},
  {kind:'click', type:'patient', enter:()=>cClearForms(), tag:'ここを押す', target:()=>[cq('#typeSeg [data-t="patient"]')], title:'まず「患者情報」を選ぶ',
-  body:'左上に、置くものが並んでいます。<b>患者情報</b>、<b>情報</b>（症状・原因など）、<b>看護診断</b>、<b>看護ケア</b>、<b>強み・資源</b>です。<br>関連図は患者を起点に描くので、最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名・対象者の目標の入力欄が出ました。'},
+  body:'左上に、置くものが並んでいます。<b>患者情報</b>、<b>情報</b>（症状・原因など）、<b>看護診断</b>、<b>看護ケア</b>、<b>強み・資源</b>です。<br>関連図は患者を起点に描くので、最初に置くのは<b>患者情報</b>です。', act:'光っている「患者情報」を押します。', res:'氏名・年齢・病名の入力欄が出ました。'},
  {kind:'add', nodeType:'patient', key:'p', tag:'ここに入力して押す', target:()=>[cq('#patientInput'),cq('#addNode')], title:'患者情報を入れる',
   body:'「氏名」に<b>航空 太郎</b>、「年齢」に<b>90</b>、「病名」に<b>慢性心不全</b>と入力してください。',
   act:'入力したら「＋ 図に置く」を押します。',
