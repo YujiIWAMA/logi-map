@@ -4,18 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>関連図 — 全体像をつなぐ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <style>
   :root{
+    --ud:"BIZ UDPGothic","BIZ UDPゴシック","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;   /* ユニバーサルデザインフォント */
     --paper:#f7f5ef; --ink:#23201b; --ink-soft:#6b6459;
     --rule:#d8d2c4; --rule-soft:#e7e2d6;
     --patient:#3d4a70; --patient-bg:#e9edf7;   /* 患者情報: この図の主体 */
     --speech:#2f6f9f;  --speech-bg:#e3eef6;
     --data:#3f8a5c;    --data-bg:#e2efe7;
-    --info:#2f7d8c;    --info-bg:#e3f0f1;       /* 情報: 現象・症状・原因など（主観/客観データ付き） */
+    --info:#2f7d8c;    --info-bg:#e3f0f1;
+    --bgctx:#8f8a80;   --bgctx-bg:#f0eee9;      /* 背景（生活状況）：E/Sにならない */       /* 情報: 現象・症状・原因など（主観/客観データ付き） */
     --diag:#3a362f;    --diag-bg:#efece3;       /* 看護診断: 結論 */
     --care:#7b5aa6;    --care-bg:#efe9f7;       /* 看護ケア: OP/TP/EP */
     --strength:#4f7d2b; --strength-bg:#e9f2df;  /* 強み・資源 */
+    --hope:#8fb0d6;    --hope-bg:#e4eef9;       /* 望み（雲形・独立） */
+    --ltgoal:#d99a5b;  --ltgoal-bg:#fde8d4;     /* 長期目標（角丸・独立） */
+    --stgoal:#cdb64a;  --stgoal-bg:#fdf5c8;     /* 短期目標（四角・独立） */
     --support:#4f7d2b; --threat:#b23a48;       /* 支える / 脅かす 矢印 */
     --accent:#9a3b34;  --proposed:#9b8cc4; --edge:#5a5449;
     --pes-e:#c15a2e;   --pes-s:#2e8b8b;   /* E=原因・関連因子 / S=症状・根拠データ */
@@ -23,13 +30,13 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",-apple-system,sans-serif;
+  body{font-family:var(--ud);
     background:var(--paper);color:var(--ink);
     display:grid;grid-template-rows:auto 1fr;height:100vh;overflow:hidden;}
   header{border-bottom:1px solid var(--rule);padding:14px 22px;
     display:flex;align-items:baseline;gap:18px;background:linear-gradient(var(--paper),#fbfaf6);}
-  header h1{font-size:19px;font-weight:700;letter-spacing:.04em;font-family:"Yu Mincho","Hiragino Mincho ProN",serif;}
-  header .sub{font-size:12.5px;color:var(--ink-soft)}
+  header h1{font-size:19px;font-weight:700;letter-spacing:.04em;font-family:var(--ud);line-height:1.35}
+  header .sub{font-size:12.5px;color:var(--ink-soft);line-height:1.5}
   header .phase{margin-left:auto;display:flex;font-size:12px;border:1px solid var(--rule);border-radius:999px;overflow:hidden;}
   header .phase span{padding:5px 14px;color:var(--ink-soft);cursor:pointer;user-select:none;transition:.12s}
   header .phase span:hover{background:var(--rule-soft);color:var(--ink)}
@@ -67,6 +74,9 @@
   .seg button[data-t="diagnosis"] .dot{background:var(--diag-bg);border:3px double var(--diag);border-radius:2px}
   .seg button[data-t="care"] .dot{background:var(--care);border-radius:2px}
   .seg button[data-t="strength"] .dot{background:var(--strength);border-radius:2px}
+  .seg button[data-t="hope"] .dot{background:var(--hope-bg);border:1.5px solid var(--hope);border-radius:50%/60%}
+  .seg button[data-t="ltgoal"] .dot{background:var(--ltgoal-bg);border:1.5px solid var(--ltgoal);border-radius:3px}
+  .seg button[data-t="stgoal"] .dot{background:var(--stgoal-bg);border:1.5px solid var(--stgoal);border-radius:0}
   .stseg button b{color:var(--strength)!important;font-size:12px!important}
   .stseg button.on{border-color:var(--strength)!important}
   .seg button.on{border-color:var(--ink);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
@@ -77,6 +87,10 @@
   .careseg button b{display:block;font-size:12.5px;color:var(--care)}
   .dxseg button b{color:var(--diag)!important;font-size:12px!important}
   .dxseg button.on{border-color:var(--diag)!important}
+  #infoKindSeg{grid-template-columns:1fr 1fr}
+  #infoKindSeg button b{color:var(--info)}
+  #infoKindSeg button[data-k="bg"] b{color:var(--bgctx)}
+  #infoKindSeg button.on{border-color:var(--info)}
   .careseg button.on{border-color:var(--care);color:var(--ink);box-shadow:var(--shadow);font-weight:700}
   textarea,input[type=text]{width:100%;border:1px solid var(--rule);border-radius:7px;padding:9px 10px;
     font:inherit;font-size:13px;background:#fff;resize:vertical;color:var(--ink);}
@@ -110,7 +124,7 @@
   .cand .acts .no{border-color:var(--accent);color:var(--accent)} .cand .acts .no:hover{background:#f6e6e4}
 
   .stat{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
-  .stat .n{font-size:20px;font-weight:700;font-family:"Yu Mincho",serif}
+  .stat .n{font-size:20px;font-weight:700;font-family:var(--ud)}
   .stat .n.warn{color:var(--accent)}
   .unlinked{background:#f6e6e4;border:1px solid #e3c4c0;border-radius:7px;padding:10px;margin-top:12px;font-size:12px;color:#7a2e28;line-height:1.5;}
   .unlinked b{display:block;margin-bottom:5px}
@@ -118,14 +132,14 @@
 
   .diaglist{margin-top:8px}
   .diagrow{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--rule);border-left:4px double var(--diag);border-radius:7px;padding:8px 9px;margin-bottom:7px;font-size:12.5px}
-  .diagrow .pri{font-family:"Yu Mincho",serif;font-weight:700;font-size:15px;color:var(--diag);flex:none;min-width:26px}
+  .diagrow .pri{font-family:var(--ud);font-weight:700;font-size:15px;color:var(--diag);flex:none;min-width:26px}
   .diagrow .txt{flex:1;line-height:1.4}
   .diagrow .mv{display:flex;flex-direction:column;gap:2px}
   .diagrow .mv button{border:1px solid var(--rule);background:#fff;border-radius:4px;width:22px;height:16px;cursor:pointer;font-size:9px;line-height:1;color:var(--ink-soft);padding:0}
   .diagrow .mv button:hover{border-color:var(--ink);color:var(--ink)} .diagrow .mv button:disabled{opacity:.3;cursor:default}
   .pes-sub{margin:-3px 0 9px 2px;padding:8px 10px;background:#fff;border:1px solid var(--rule);border-top:none;border-radius:0 0 7px 7px;font-size:11.5px;line-height:1.6}
   .pes-sub .prow{display:flex;gap:6px;align-items:baseline;margin:2px 0}
-  .pes-sub .tag{flex:none;font-weight:700;font-family:"Yu Mincho",serif;min-width:16px;text-align:center;border-radius:4px;padding:0 4px}
+  .pes-sub .tag{flex:none;font-weight:700;font-family:var(--ud);min-width:16px;text-align:center;border-radius:4px;padding:0 4px}
   .pes-sub .tag.e{color:#fff;background:var(--pes-e)} .pes-sub .tag.s{color:#fff;background:var(--pes-s)}
   .pes-sub .tag.sp{color:#fff;background:var(--support)} .pes-sub .tag.th{color:#fff;background:var(--threat)}
   .pes-sub .items{color:var(--ink);flex:1}
@@ -136,7 +150,7 @@
   .care-item{background:#fff;border:1px solid var(--rule);border-left:4px solid var(--care);border-radius:7px;
     padding:8px 10px;margin-bottom:7px;font-size:12px;line-height:1.5}
   .care-item .en{font-weight:700;color:#6e241f}
-  .care-item .en .etag{background:var(--pes-e);color:#fff;border-radius:4px;padding:0 5px;font-size:10px;margin-right:5px;font-family:"Yu Mincho",serif}
+  .care-item .en .etag{background:var(--pes-e);color:#fff;border-radius:4px;padding:0 5px;font-size:10px;margin-right:5px;font-family:var(--ud)}
   .care-item .kinds{margin-top:4px;display:flex;gap:5px;flex-wrap:wrap}
   .care-item .k{font-size:10.5px;font-weight:700;border-radius:4px;padding:1px 7px;border:1px solid var(--care);color:var(--care)}
   .care-item .k.on{background:var(--care);color:#fff}
@@ -150,7 +164,7 @@
     font-size:12px;color:#7a2e28;line-height:1.5}
 
   .question{margin-top:16px;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px;box-shadow:var(--shadow);}
-  .question .q{font-family:"Yu Mincho",serif;font-size:14px;line-height:1.6;margin-bottom:10px}
+  .question .q{font-family:var(--ud);font-size:14px;line-height:1.6;margin-bottom:10px}
   .question textarea{font-size:12.5px;min-height:70px}
 
   /* キャンバス上部の帯：ツールバー。位置を固定せず並べ、足りなければ折り返す（重ならない） */
@@ -179,7 +193,7 @@
     border-radius:12px;box-shadow:0 12px 40px rgba(35,32,27,.2);padding:18px 20px}
   #resumeBanner.on{display:block}
   #resumeBanner.on ~ .empty-hint{display:none !important}
-  #resumeBanner .rb-title{font-family:"Yu Mincho",serif;font-size:17px;font-weight:700;margin-bottom:4px}
+  #resumeBanner .rb-title{font-family:var(--ud);font-size:17px;font-weight:700;margin-bottom:4px}
   #resumeBanner .rb-meta{font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;line-height:1.6}
   #resumeBanner .rb-btns{display:flex;gap:8px;flex-wrap:wrap}
   #resumeBanner .rb-btns button{flex:1;min-width:140px;border:1px solid var(--rule);background:#fff;border-radius:8px;
@@ -191,7 +205,7 @@
 
   /* PES作法 達成度ゲージ */
   .gauge-top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
-  .gauge-pct{font-family:"Yu Mincho",serif;font-size:26px;font-weight:700;color:var(--ink)}
+  .gauge-pct{font-family:var(--ud);font-size:26px;font-weight:700;color:var(--ink)}
   .gauge-sub{font-size:11.5px;color:var(--ink-soft);line-height:1.4}
   .gauge-bar{height:9px;background:var(--rule-soft);border-radius:999px;overflow:hidden}
   .gauge-fill{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#c15a2e,#b07a1e,#3f8a5c);transition:width .4s ease}
@@ -210,11 +224,11 @@
     box-shadow:0 20px 60px rgba(35,32,27,.35);max-width:640px;width:100%;max-height:86vh;overflow-y:auto;padding:26px 28px}
   #reviewClose{position:absolute;top:14px;right:16px;border:none;background:none;font-size:22px;color:var(--ink-soft);cursor:pointer;line-height:1}
   #reviewClose:hover{color:var(--ink)}
-  #reviewBody h2{font-family:"Yu Mincho",serif;font-size:20px;margin-bottom:4px}
+  #reviewBody h2{font-family:var(--ud);font-size:20px;margin-bottom:4px}
   #reviewBody .rlead{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:18px}
   .rcard{border:1px solid var(--rule);border-left:4px solid var(--patient);border-radius:9px;padding:13px 15px;margin-bottom:12px;background:#fff}
   .rcard .rk{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px}
-  .rcard .rv{font-family:"Yu Mincho",serif;font-size:15px;color:var(--ink);margin-bottom:5px}
+  .rcard .rv{font-family:var(--ud);font-size:15px;color:var(--ink);margin-bottom:5px}
   .rcard .rd{font-size:12.3px;color:var(--ink-soft);line-height:1.65}
   .rcard.style{border-left-color:var(--speech)} .rcard.dir{border-left-color:var(--data)}
   .rcard.stumble{border-left-color:var(--accent)} .rcard.trial{border-left-color:var(--interp,#b07a1e)}
@@ -228,7 +242,7 @@
   .legend .sw{width:12px;height:12px;border-radius:3px;flex:none}
   .legend .sw.diag{border:3px double var(--diag);background:var(--diag-bg);border-radius:2px;width:14px;height:14px}
   .empty-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.8;pointer-events:none;}
-  .empty-hint .big{font-family:"Yu Mincho",serif;font-size:17px;color:var(--ink);display:block;margin-bottom:6px}
+  .empty-hint .big{font-family:var(--ud);font-size:17px;color:var(--ink);display:block;margin-bottom:6px}
 
   /* 右クリックメニュー */
   .ctxmenu{position:fixed;z-index:60;background:#fff;border:1px solid var(--rule);border-radius:8px;box-shadow:var(--shadow);padding:4px;min-width:158px;display:none;font-size:13px}
@@ -244,7 +258,7 @@
   #suppModal.on{display:flex}
   .sm-box{position:relative;background:#fff;border-radius:12px;padding:18px 20px;width:min(440px,92vw);max-height:90vh;overflow:auto;box-shadow:var(--shadow)}
   .sm-x{position:absolute;right:10px;top:8px;border:none;background:none;font-size:20px;cursor:pointer;color:var(--ink-soft)}
-  .sm-ttl{font-family:"Yu Mincho",serif;font-weight:700;font-size:15px;margin-bottom:8px;padding-right:20px}
+  .sm-ttl{font-family:var(--ud);font-weight:700;font-size:15px;margin-bottom:8px;padding-right:20px}
   .sm-list{margin-bottom:10px}
   .sm-item{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.6;padding:5px 0;border-bottom:1px solid var(--rule-soft)}
   .sm-item .sk{flex:none;font-size:10.5px;color:#fff;border-radius:4px;padding:0 6px;margin-top:2px}
@@ -263,7 +277,7 @@
   .toast .ico{flex:none;width:26px;height:26px;border-radius:50%;background:#f6e6e4;color:var(--accent);
     display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;margin-top:1px}
   .toast .body{flex:1;font-size:12.8px;line-height:1.65;color:var(--ink)}
-  .toast .body b{color:var(--accent);font-family:"Yu Mincho",serif;letter-spacing:.02em}
+  .toast .body b{color:var(--accent);font-family:var(--ud);letter-spacing:.02em}
   .toast .body .lead{display:block;margin-bottom:3px}
   .toast .x{flex:none;border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
   .toast .x:hover{color:var(--ink)}
@@ -297,7 +311,7 @@
   #ccard .cstp{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center}
   #ccard .cprog{flex:1;height:5px;background:var(--rule-soft);border-radius:3px;margin:0 10px;overflow:hidden}
   #ccard .cprog i{display:block;height:100%;background:var(--accent)}
-  #ccard .ctt{font-family:"Yu Mincho",serif;font-size:15.5px;font-weight:700;margin:5px 0 5px}
+  #ccard .ctt{font-family:var(--ud);font-size:15.5px;font-weight:700;margin:5px 0 5px}
   #ccard .cbd{font-size:12.8px;line-height:1.75}
   #ccard .cbd b{color:var(--accent)}
   #ccard .cact{margin-top:8px;padding:7px 10px;background:#fdf0d5;border-radius:7px;font-size:12.6px;line-height:1.65}
@@ -329,6 +343,9 @@
       <button data-t="diagnosis"><span class="dot"></span>看護診断</button>
       <button data-t="care"><span class="dot"></span>看護ケア</button>
       <button data-t="strength"><span class="dot"></span>強み・資源</button>
+      <button data-t="hope"><span class="dot"></span>望み</button>
+      <button data-t="ltgoal"><span class="dot"></span>長期目標</button>
+      <button data-t="stgoal"><span class="dot"></span>短期目標</button>
     </div>
 
     <div id="careInput" style="display:none">
@@ -362,6 +379,14 @@
           <button data-s="env"><b>環境</b></button>
           <button data-s="service"><b>サービス</b></button>
         </div>
+      </div>
+      <div id="infoKindInput">
+        <div class="supp-lab">この情報の区分</div>
+        <div class="careseg" id="infoKindSeg">
+          <button data-k="pes" class="on"><b>症状・原因など</b>E・Sになる</button>
+          <button data-k="bg"><b>背景</b>生活状況・生活歴</button>
+        </div>
+        <div class="hint" id="infoKindHint" style="margin-top:4px"></div>
       </div>
       <div id="suppInput">
         <div class="supp-lab"><span class="sk s">主観</span>患者が語ったこと・感じていること<span class="sub">例:「少し歩くだけで苦しい」</span></div>
@@ -435,7 +460,9 @@
       <span><span class="sw" style="background:var(--care)"></span>看護ケア（OP/TP/EP）＝二重線で原因へ</span>
       <span><span class="sw" style="background:var(--pes-e);height:3px;border-radius:2px"></span>原因（E）から結果への矢印（リスク型の診断へ入る矢印もE）</span>
       <span><span class="sw" style="background:var(--pes-s);height:3px;border-radius:2px"></span>症状・徴候／根拠（S）から看護診断への矢印</span>
+      <span><span class="sw" style="background:var(--bgctx-bg);border:2px dotted var(--bgctx)"></span>〔背景〕生活状況・生活歴（E・Sにならない／灰色の線で関連づけ）</span>
       <span><span class="sw" style="background:var(--strength)"></span>強み・資源</span>
+      <span><span class="sw" style="background:var(--hope-bg);border:1.5px solid var(--hope);border-radius:50%/60%"></span>望み・<span class="sw" style="background:var(--ltgoal-bg);border:1.5px solid var(--ltgoal);border-radius:3px"></span>長期目標・<span class="sw" style="background:var(--stgoal-bg);border:1.5px solid var(--stgoal)"></span>短期目標（独立・矢印なし）</span>
       <span><svg width="26" height="10"><line x1="0" y1="5" x2="19" y2="5" stroke="#4f7d2b" stroke-width="2.5"/><polygon points="18,1 26,5 18,9" fill="#4f7d2b"/></svg><b>支える</b>（強み・資源 ➔ 目標指向型の診断）</span>
       <span><svg width="26" height="10"><line x1="0" y1="5" x2="23" y2="5" stroke="#b23a48" stroke-width="2.5"/><line x1="24" y1="0" x2="24" y2="10" stroke="#b23a48" stroke-width="3"/></svg><b>脅かす</b>（情報 ➔ 目標指向型の診断。右クリックで根拠Sに）</span>
     </div>
@@ -514,6 +541,9 @@ const TYPE_META = {
   data:      {border:'#3f8a5c', bgvar:'--data-bg',    hint:'検査値・バイタル・観察事実など。測定・観察された客観情報です。'},
   diagnosis: {border:'#3a362f', bgvar:'--diag-bg',    hint:'全体像から導いた結論。二重枠で表示され、複数あるときは優先順位（＃）をつけられます。'},
   strength:  {border:'#4f7d2b', bgvar:'--strength-bg', hint:'目標指向型の看護診断を支える強み・資源。本人・家族・環境・サービスから区分を選びます（例：〔家族〕妻の介護意欲が高い）。強み・資源 ➔ 目標指向型の診断 の向きでつなぐと「支える」矢印になります。'},
+  hope:      {border:'#8fb0d6', bgvar:'--hope-bg',    hint:'本人・家族の望み（例：最期まで自宅で過ごしたい）。矢印ではつながず、独立して置きます。'},
+  ltgoal:    {border:'#d99a5b', bgvar:'--ltgoal-bg',  hint:'看護の長期目標（例：退院後も転倒せず自宅で生活できる）。矢印ではつながず、独立して置きます。'},
+  stgoal:    {border:'#cdb64a', bgvar:'--stgoal-bg',  hint:'看護の短期目標（例：1週間後、ふらつきなく歩行器でトイレまで歩ける）。矢印ではつながず、独立して置きます。'},
   care:      {border:'#7b5aa6', bgvar:'--care-bg',    hint:'原因（E）に対する看護計画。OP（観察）/TP（ケア）/EP（教育）を選び、看護ケア ➔ 原因（E）の向き（二重線）で繋ぎます。'}
 };
 const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -527,20 +557,29 @@ function log(a,p){ if(tutActive) return; interactionLog.push({t:Date.now(),actio
 
 /* ---- Cytoscape ---- */
 /* 本画面とチュートリアルで共用するスタイル */
+/* 望みの雲形（縦横に伸び縮みする） */
+const CLOUD_SVG='data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240" viewBox="0 0 200 120" preserveAspectRatio="none"><path d="M42 104 C14 106 4 84 18 70 C4 54 18 32 40 36 C42 14 72 6 88 20 C100 4 134 4 144 22 C164 12 192 26 186 48 C200 60 196 86 176 92 C174 110 148 116 132 106 C116 118 88 118 76 106 C64 116 46 114 42 104 Z" fill="#e4eef9" stroke="#8fb0d6" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>');
 const CY_STYLE=[
     { selector:'node', style:{
         'label':'data(label)','width':'label','height':'label','padding':'12px',
-        'shape':'round-rectangle','background-color':'data(bg)','border-width':2,'border-color':'data(border)',
-        'font-size':'13px','font-family':'Hiragino Kaku Gothic ProN, sans-serif','color':'#23201b',
+        'shape':'rectangle','background-color':'data(bg)','border-width':2,'border-color':'data(border)',
+        'font-size':'13px','font-family':'BIZ UDPGothic, Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, sans-serif','color':'#23201b',
         'text-wrap':'wrap','text-max-width':'170px','text-valign':'center','text-halign':'center'}},
     { selector:'node[ntype="patient"]', style:{
-        'text-justification':'left','padding':'14px','font-size':'12.5px','text-max-width':'190px'}},
+        'text-justification':'left','padding':'14px','font-size':'14px','text-max-width':'200px'}},
     { selector:'node[ntype="diagnosis"]', style:{'border-style':'double','border-width':5,'padding':'15px','font-weight':'bold'}},
     { selector:'node[ntype="info"]', style:{'text-justification':'left','text-max-width':'190px'}},
-    { selector:'node[ntype="care"]', style:{'shape':'round-tag','border-width':2,'padding':'11px','font-size':'12px'}},
+    { selector:'node[ntype="ltgoal"]', style:{'shape':'round-rectangle','padding':'14px'}},
+    { selector:'node[ntype="stgoal"]', style:{'shape':'rectangle','padding':'12px'}},
+    /* 望み：雲形（SVGの雲を背景に描き、ノード自体の塗り・枠は消す） */
+    { selector:'node[ntype="hope"]', style:{'shape':'rectangle','background-opacity':0,'border-width':0,'padding':'26px',
+        'background-image':CLOUD_SVG,'background-fit':'none','background-width':'100%','background-height':'100%','background-clip':'none','background-image-containment':'over','background-image-opacity':1}},
+    { selector:'node[ntype="care"]', style:{'shape':'tag','border-width':2,'padding':'11px','font-size':'12px'}},
     { selector:'node[ntype="strength"]', style:{'shape':'cut-rectangle','padding':'12px','font-size':'12.5px'}},
+    { selector:'node[?isbg]', style:{'border-style':'dotted','border-width':2.5,'color':'#4a463f'}},
     { selector:'node.needcare', style:{'border-color':'#9a3b34','border-width':3}},
     { selector:'node.unlinked', style:{'border-color':'#9a3b34','border-style':'dashed','border-width':3}},
+    { selector:'node[ntype="patient"].unlinked', style:{'border-style':'solid','border-color':'#3d4a70','border-width':2}},   /* 患者情報の枠はいつも実線 */
     { selector:'node[ntype="diagnosis"].unlinked', style:{'border-style':'double','border-color':'#9a3b34','border-width':5}},
     { selector:'.faded', style:{'opacity':.14}},
     { selector:'node.focus', style:{'underlay-color':'#e8a33d','underlay-opacity':.35,'underlay-padding':9,'underlay-shape':'round-rectangle','border-color':'#e8a33d','border-width':3}},
@@ -562,6 +601,8 @@ const CY_STYLE=[
     /* 目標指向型の診断へ入る矢印：支える＝緑・三角／脅かす＝赤・先端が横棒（色と矢じりの形の両方で区別） */
     { selector:'edge[kind="support"]', style:{'line-color':'#4f7d2b','target-arrow-color':'#4f7d2b','target-arrow-shape':'triangle','width':2.5}},
     { selector:'edge[kind="threaten"]', style:{'line-color':'#b23a48','target-arrow-color':'#b23a48','target-arrow-shape':'tee','arrow-scale':1.5,'width':2.5}},
+    /* 背景（生活状況）につながる線：灰色の細い「関連」。E/Sの色は付けない */
+    { selector:'edge[kind="bgrel"]', style:{'line-color':'#a39e94','target-arrow-color':'#a39e94','width':1.6,'arrow-scale':.9}},
     { selector:'edge.potential', style:{'line-style':'dashed'}},
     { selector:'edge.focus, edge.focusmiss', style:{'width':4,'z-index':20}},
     { selector:'edge:selected', style:{'line-color':'#23201b','target-arrow-color':'#23201b','width':3}}
@@ -895,6 +936,7 @@ let linkSource=null;
 cy.on('tap','node',evt=>{
   const n=evt.target;
   if(!coachAllowNodeTap(n)) return;
+  if(isStandalone(n)){ if(linkSource){ addEdge(linkSource.id(),n.id()); linkSource.unselect(); linkSource=null; } else { showToast(KATA.standalone(n)); n.unselect(); } return; }
   if(linkSource&&linkSource.id()!==n.id()){ addEdge(linkSource.id(),n.id(),{potential:false}); linkSource.unselect(); linkSource=null; }
   else if(linkSource&&linkSource.id()===n.id()){ linkSource=null; }
   else linkSource=n;
@@ -954,8 +996,9 @@ cy.on('cxttap','node',evt=>{
   const n=evt.target, oe=evt.originalEvent;
   ctx.innerHTML='';
   if(tutActive) return;
-  if(isInfoNode(n)){
+  if(isInfoNode(n)||isBgNode(n)){
     ctx.appendChild(mkbtn('根拠データ（主観・客観）を追加・編集…',()=>{ hideCtx(); openSupp(n.id()); }));
+    ctx.appendChild(mkbtn(isBgNode(n)?'区分を「症状・原因など」に戻す':'区分を「背景（生活状況）」にする',()=>{ hideCtx(); setBackground(n,!isBgNode(n)); }));
     ctx.appendChild(sep());
   }
   if(n.data('ntype')==='patient'){
@@ -991,7 +1034,7 @@ cy.on('cxttap',evt=>{ if(evt.target===cy) hideCtx(); });
 
 /* ---- 型セグメント（患者情報・看護ケアは専用フォームに切替）---- */
 let careKind='OP';
-const NODETEXT_PH={info:'情報の名前（例: 呼吸苦）',diagnosis:'看護診断名（例: 非効果的呼吸パターン）',strength:'強み・資源（例: 妻の介護意欲が高い）'};
+const NODETEXT_PH={hope:'望み（例: 最期まで自宅で過ごしたい）',ltgoal:'長期目標（例: 退院後も転倒せず自宅で生活できる）',stgoal:'短期目標（例: 1週間後、歩行器でトイレまで歩ける）',info:'情報の名前（例: 呼吸苦）',diagnosis:'看護診断名（例: 非効果的呼吸パターン）',strength:'強み・資源（例: 妻の介護意欲が高い）'};
 function selectType(t){
   document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
   currentType=t;
@@ -1001,6 +1044,7 @@ function selectType(t){
   document.getElementById('careInput').style.display=ca?'block':'none';
   document.getElementById('singleInput').style.display=(pt||ca)?'none':'block';
   document.getElementById('suppInput').style.display=inf?'block':'none';
+  document.getElementById('infoKindInput').style.display=inf?'block':'none';
   document.getElementById('stInput').style.display=t==='strength'?'block':'none';
   document.getElementById('dxTypeInput').style.display=t==='diagnosis'?'block':'none';
   if(NODETEXT_PH[t]) document.getElementById('nodeText').placeholder=NODETEXT_PH[t];
@@ -1048,6 +1092,26 @@ document.getElementById('stSeg').addEventListener('click',e=>{
   document.getElementById('nodeText').focus();
 });
 function strengthLabelText(base,st){ return wrapJa('〔'+(ST_TYPES[st]||'本人')+'〕'+base); }
+const INFO_KIND_HINT={pes:'症状・原因など、看護診断につながる情報。つながり方によって S・E1・E2… が自動で付きます。',
+  bg:'生活状況・生活歴など、全体像として押さえておく情報。<b>E・Sにはならず</b>、灰色の「関連」の線でつなぎます（看護診断へは直接つなぎません）。'};
+let infoKind='pes';
+function setInfoKind(k){ infoKind=k; document.querySelectorAll('#infoKindSeg button').forEach(x=>x.classList.toggle('on',x.dataset.k===k)); document.getElementById('infoKindHint').innerHTML=INFO_KIND_HINT[k]; }
+document.getElementById('infoKindSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; setInfoKind(b.dataset.k); document.getElementById('nodeText').focus(); });
+setInfoKind('pes');
+const BG_COLORS=()=>({bg:cssVar('--bgctx-bg'),border:cssVar('--bgctx')});
+/* 情報の区分を切り替える（背景 ⇔ 症状・原因など）。背景にできない線（診断へ・ケアから）は確認して外す */
+function setBackground(n,on){
+  if(!!n.data('isbg')===on) return;
+  if(on){
+    const bad=n.connectedEdges().filter(e=>(e.source().id()===n.id()&&e.target().data('ntype')==='diagnosis')||(e.target().id()===n.id()&&e.source().data('ntype')==='care'));
+    if(bad.length && !confirm(`背景はE・Sにならないため、看護診断へ入る矢印・看護ケアからの矢印（${bad.length}本）はつなげません。\nこれらの矢印を外して「背景」にしますか？`)) return;
+    bad.forEach(e=>{ log('delete_edge',{id:e.id()}); e.remove(); });
+    const c=BG_COLORS(); n.data({isbg:true,bg:c.bg,border:c.border});
+  }else{
+    n.data({isbg:false,bg:cssVar(TYPE_META.info.bgvar),border:TYPE_META.info.border});
+  }
+  log('set_background',{id:n.id(),on}); refresh();
+}
 let dxType='actual';
 const dxTypeOf=n=>DX_TYPES[n.data('dxtype')]?n.data('dxtype'):'actual';
 function setDxSeg(t){ dxType=t; document.querySelectorAll('#dxTypeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.x===t)); document.getElementById('dxTypeHint').innerHTML=DX_TYPES[t].hint; document.getElementById('aimInput').style.display=t==='goal'?'block':'none'; }
@@ -1118,11 +1182,13 @@ function addNode(type,payload,opts){
     base=payload.text; extra={stype:ST_TYPES[payload.stype]?payload.stype:'self'}; label=strengthLabelText(base,extra.stype);
   }else if(type==='info'){
     base=payload.text; label=payload.text; extra={supp:(payload.supp||[]).map(x=>({k:x.k,t:x.t}))};
-  }else{ base=payload.text; label=payload.text; }
+    if(payload.isbg){ const c=BG_COLORS(); extra.isbg=true; extra.bg=c.bg; extra.border=c.border; }
+  }else if(STANDALONE_TYPES[type]){ base=payload.text; label=wrapJa(payload.text); }
+  else{ base=payload.text; label=payload.text; }
   const pos=(opts&&opts.pos)||freeSpotInView();
-  cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},position:pos});
+  cy.add({group:'nodes',data:{id,base,label,ntype:type,bg:cssVar(m.bgvar),border:m.border,...extra},position:pos});   // extra.bg/border（背景）が優先
   if(type==='diagnosis'){ diagnosisOrder.push(id); relabelDiagnoses(); renderDiagnoses(); }
-  log('add_node',{id,type,carekind:extra.carekind,stype:extra.stype,supp:extra.supp?extra.supp.length:undefined}); refresh();
+  log('add_node',{id,type,isbg:extra.isbg||undefined,carekind:extra.carekind,stype:extra.stype,supp:extra.supp?extra.supp.length:undefined}); refresh();
   coachEvent('node_added',{id,type});
   return id;
 }
@@ -1152,7 +1218,7 @@ document.getElementById('addNode').addEventListener('click',()=>{
     const ta=document.getElementById('nodeText'), sj=document.getElementById('subjText'), ob=document.getElementById('objText');
     const v=ta.value.trim(); if(!v) return;
     const supp=[]; if(sj.value.trim()) supp.push({k:'subj',t:sj.value.trim()}); if(ob.value.trim()) supp.push({k:'obj',t:ob.value.trim()});
-    addNode('info',{text:v,supp}); ta.value=sj.value=ob.value=''; ta.focus();
+    addNode('info',{text:v,supp,isbg:infoKind==='bg'}); ta.value=sj.value=ob.value=''; ta.focus();
   }else{
     const ta=document.getElementById('nodeText'); const v=ta.value.trim(); if(!v) return;
     addNode(currentType,{text:v,dxtype:dxType,aim:dxAim.value}); ta.value=''; dxAim.value=''; ta.focus();
@@ -1216,6 +1282,8 @@ const KATA={
   noPatient:`<span class="lead"><b>【関連図の作法】</b></span>関連図は<b>患者</b>を起点に描きます。まず「患者情報」（氏名・年齢・病名）を置いてから、情報・看護診断・看護ケアを置きましょう。`,
   patientFirst:`<span class="lead"><b>まずは「患者情報」から</b></span>関連図は患者を起点に描きます。氏名・年齢・病名を入れて「図に置く」を押すと、情報・看護診断・看護ケアが選べるようになります。`,
   toPatient:`<span class="lead"><b>【関連図の作法】</b></span>患者情報は全体の前提（起点）となります。他の情報から患者情報へ矢印が入ることはありません。`,
+  standalone:n=>`<span class="lead"><b>【関連図の作法】</b></span><b>${STANDALONE_TYPES[n.data('ntype')]}</b>は、矢印でつながず独立して置きます。図全体を方向づける目印として、関係する情報の近くに置きましょう。`,
+  bgToDiag:`<span class="lead"><b>【関連図の作法】</b></span><b>背景（生活状況）</b>は、看護診断の根拠（S）や原因（E）としては扱いません。この生活状況が、どんな症状や原因につながっているかを考えて、その情報へつなぎましょう。症状や原因として効いているなら、右クリックで「症状・原因など」に切り替えます。`,
   toStrength:`<span class="lead"><b>【関連図の作法】</b></span>強み・資源は、目標指向型の看護診断を支える起点です。他の情報から強み・資源へ矢印は入れません（患者情報からはつなげます）。`,
   strengthTarget:`<span class="lead"><b>【関連図の作法】</b></span>強み・資源の矢印は、<b>目標指向型の看護診断</b>へ向けます（強み・資源 ➔ 診断 ＝「支える」）。実在型・リスク型の診断へ使う場合は、診断を右クリックして型を「目標指向型」に変えてください。`
 };
@@ -1223,6 +1291,12 @@ const KATA={
 function addEdge(s,t,{potential=false}={}){
   const sn=cy.getElementById(s), tn=cy.getElementById(t);
   if(sn.empty()||tn.empty()) return false;
+
+  // 作法⓪: 望み・長期目標・短期目標は独立して置く（矢印が出たり入ったりしない）
+  if(isStandalone(sn)||isStandalone(tn)){
+    log('blocked_edge',{reason:'standalone',source:s,target:t});
+    showToast(KATA.standalone(isStandalone(sn)?sn:tn)); return false;
+  }
 
   // 作法①: 看護診断(P)から矢印を出させない（主客逆転の防止）
   if(sn.data('ntype')==='diagnosis'){
@@ -1237,6 +1311,11 @@ function addEdge(s,t,{potential=false}={}){
     return false;
   }
 
+  // 作法: 背景（生活状況）は看護診断へ直接つながない（E/Sにはならない）
+  if(isBgNode(sn) && tn.data('ntype')==='diagnosis'){
+    log('blocked_edge',{reason:'bg_to_diagnosis',source:s,target:t});
+    showToast(KATA.bgToDiag); return false;
+  }
   // 作法③: 看護計画は「ケア ➔ 原因」の向き。原因からケアへは引かせない
   if(tn.data('ntype')==='care'){
     log('blocked_edge',{reason:'target_is_care',source:s,target:t});
@@ -1275,7 +1354,12 @@ function addEdge(s,t,{potential=false}={}){
    ・看護ケア(OP/TP/EP)は「看護ケア ➔ 働きかける原因」の向き（二重線）。連鎖の判定には含めない
    ・Eに対して介入（看護ケア）を考える。Eを細かく分解するほど看護ケアも具体的になる。分解したら「看護で予防・対策できるか」を一つずつ考える。共同問題もEとして扱う
    ============================================================ */
-const isInfoNode=n=>{ const t=n.data('ntype'); return t==='info'||t==='speech'||t==='data'; };
+/* 望み・長期目標・短期目標：図の中で独立して置く（矢印が出たり入ったりしない） */
+const STANDALONE_TYPES={hope:'望み',ltgoal:'長期目標',stgoal:'短期目標'};
+const isStandalone=n=>!!STANDALONE_TYPES[n.data('ntype')];
+/* 背景（生活状況・生活歴）：全体像として置くが、E/S（PESの連鎖）には入れない。灰色の「関連」の線でつなぐ */
+const isBgNode=n=>n.data('ntype')==='info' && !!n.data('isbg');
+const isInfoNode=n=>{ const t=n.data('ntype'); return (t==='info'&&!n.data('isbg'))||t==='speech'||t==='data'; };
 /* 目標指向型の診断と、そこへ入る矢印の役割
    ・強み・資源 ➔ 診断 ＝ support（支える）
    ・情報 ➔ 診断 ＝ 既定は threaten（脅かす）。右クリックで evidence（根拠＝S）に切り替える（edge の gmode に保存） */
@@ -1373,7 +1457,8 @@ function wrapJa(str,limit){
 /* 情報ノードの表示文字：[E1: ]情報名 ＋ 主観・客観データの行 */
 function infoLabelText(n,tag){
   const sp=n.data('supp')||[];
-  return wrapJa([(tag?tag+': ':'')+n.data('base'), ...sp.map(x=>(x.k==='subj'?'主観：':'客観：')+x.t)].join('\n'));
+  if(isBgNode(n)) tag='';
+  return wrapJa([(isBgNode(n)?'〔背景〕':'')+(tag?tag+': ':'')+n.data('base'), ...sp.map(x=>(x.k==='subj'?'主観：':'客観：')+x.t)].join('\n'));
 }
 function updatePES(c,quiet){
   c=c||cy;
@@ -1382,8 +1467,8 @@ function updatePES(c,quiet){
   c.edges().forEach(e=>{
     const sT=e.source().data('ntype'), tT=e.target().data('ntype');
     const gm=goalEdgeMode(e);
-    const k = sT==='care' ? 'care' : (gm==='support'||gm==='threaten') ? gm : undefined;
-    if(k){ if(e.data('kind')!==k){ e.data('kind',k); if(!quiet&&k!=='care') log('goal_edge_kind',{id:e.id(),kind:k}); } }
+    const k = sT==='care' ? 'care' : (isBgNode(e.source())||isBgNode(e.target())) ? 'bgrel' : (gm==='support'||gm==='threaten') ? gm : undefined;
+    if(k){ if(e.data('kind')!==k){ e.data('kind',k); if(!quiet&&k!=='care'&&k!=='bgrel') log('goal_edge_kind',{id:e.id(),kind:k}); } }
     else if(e.data('kind')!==undefined) e.removeData('kind');
     const r=pesRole(e,info);
     if(r){
@@ -1395,7 +1480,7 @@ function updatePES(c,quiet){
   // ノード頭に S:/E1:/E2: タグを付与（speech/data のみ）＋ 介入点のない連鎖の起点を強調
   c.nodes().removeClass('needcare');
   c.nodes().forEach(n=>{
-    if(!isInfoNode(n)) return;
+    if(!isInfoNode(n)&&!isBgNode(n)) return;
     const r=info[n.id()];
     const want = infoLabelText(n, r ? pesTagOf(r.role,r.level) : '');
     if(n.data('label')!==want) n.data('label',want);
@@ -1473,7 +1558,7 @@ const CARE_KINDS=['OP','TP','EP'];
 /* ============================================================
    右パネルの枠 ⇔ 図の該当箇所
    ・点検パネルの枠（連鎖・看護診断・未接続の情報）をクリックすると、
-     図の該当するノードと線だけを光らせ、ほかを薄くして、その範囲へ移動する
+     図の該当するノードと線だけを光らせ、ほかを薄くする（拡大・移動はしない）
    ・もう一度クリック／図の何もない所をクリック／Esc／図の変更 で元に戻る
    ============================================================ */
 let focusKey=null;
@@ -1513,13 +1598,7 @@ function focusOn(ids,el,miss,kind){
   cy.elements().addClass('faded'); eles.removeClass('faded').addClass(miss?'focusmiss':'focus');
   hopLayers().forEach(x=>x.style.opacity='.2');
   el.classList.add('on');
-  // 該当範囲が見えるよう移動（上のツールバー・下の凡例に隠れない範囲へ）
-  const box=document.getElementById('cy'), W=box.clientWidth, H=box.clientHeight, r=box.getBoundingClientRect();
-  const topBand=Math.max(0,document.getElementById('stageTop').getBoundingClientRect().bottom-r.top)+16;
-  const lg=document.querySelector('.legend'), botBand=lg?Math.max(0,r.bottom-lg.getBoundingClientRect().top)+12:20;
-  const bb=eles.boundingBox({includeLabels:true}), pad=40, aw=W-2*pad, ah=Math.max(120,H-topBand-botBand);
-  const z=Math.max(cy.minZoom(),Math.min(1.2,aw/bb.w,ah/bb.h));
-  cy.animate({zoom:z,pan:{x:pad+(aw-z*bb.w)/2-z*bb.x1,y:topBand+(ah-z*bb.h)/2-z*bb.y1}},{duration:350});
+  // 図は動かさない（全体を見たまま、該当箇所が光るだけ）
   log('panel_focus',{kind,n:set.length});
 }
 document.querySelector('.panel.right').addEventListener('click',e=>{
@@ -1565,7 +1644,7 @@ function computeChecks(){
   const diags=cy.nodes().filter(n=>n.data('ntype')==='diagnosis');
   const Snodes=cy.nodes().filter(n=>isInfoNode(n) && n.outgoers('edge').some(e=>e.target().data('ntype')==='diagnosis'));
   const Enodes=eNodes();
-  const unlinked=cy.nodes().filter(n=>n.degree()===0);
+  const unlinked=cy.nodes().filter(n=>n.degree()===0&&!isStandalone(n));
   const pNoS=diags.filter(d=>!d.incomers('edge').sources().some(x=>isInfoNode(x)||(isGoalDx(d)&&x.data('ntype')==='strength')));
   const actualDx=diags.filter(d=>dxTypeOf(d)==='actual');
   const SnodesA=Snodes.filter(sn=>sn.outgoers('edge').targets().some(t=>t.data('ntype')==='diagnosis'&&dxTypeOf(t)==='actual'));
@@ -1660,6 +1739,8 @@ function buildReview(){
 /* ---- 未接続ノードの型別ヒント（PES構造への気づきを促す）---- */
 function unlinkedTip(ntype){
   switch(ntype){
+    case 'bg':
+      return '➔ 背景（生活状況）です。患者情報や、関係する症状・原因の情報と「関連」の線でつないでおきましょう。';
     case 'info':
     case 'speech':
     case 'data':
@@ -1682,14 +1763,14 @@ function refresh(){
   document.getElementById('cNodes').textContent=cy.nodes().length;
   document.getElementById('cEdges').textContent=cy.edges().length;
   document.getElementById('emptyHint').style.display=cy.nodes().length?'none':'block';
-  const unlinked=cy.nodes().filter(n=>n.degree()===0);
+  const unlinked=cy.nodes().filter(n=>n.degree()===0&&!isStandalone(n));   // 望み・目標は独立なので対象外
   cy.nodes().removeClass('unlinked'); unlinked.addClass('unlinked');
   document.getElementById('cUnlinked').textContent=unlinked.length;
   const box=document.getElementById('unlinkedBox');
   if(unlinked.length){ box.style.display='block';
     document.getElementById('unlinkedList').innerHTML=unlinked.map(n=>{
       const nm=esc(n.data('base'));
-      return `<li class="focusable" data-focus="${n.id()}" data-kind="unlinked" data-miss="1" title="クリックで図の該当箇所を表示"><span class="nm">${nm}</span><span class="tip">${unlinkedTip(n.data('ntype'))}</span></li>`;
+      return `<li class="focusable" data-focus="${n.id()}" data-kind="unlinked" data-miss="1" title="クリックで図の該当箇所を表示"><span class="nm">${nm}</span><span class="tip">${unlinkedTip(isBgNode(n)?'bg':n.data('ntype'))}</span></li>`;
     }).join(''); }
   else box.style.display='none';
   syncPatientLock();
@@ -1840,7 +1921,7 @@ const SAVE_VERSION=1;
 function serialize(){
   const nodes=cy.nodes().map(n=>({
     data:{ id:n.id(), base:n.data('base'), ntype:n.data('ntype'),
-      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), pgoal:n.data('pgoal'), supp:n.data('supp'), dxtype:n.data('dxtype'), aim:n.data('aim'), stype:n.data('stype') },
+      carekind:n.data('carekind'), pname:n.data('pname'), page:n.data('page'), pdisease:n.data('pdisease'), pgoal:n.data('pgoal'), supp:n.data('supp'), isbg:n.data('isbg')||undefined, dxtype:n.data('dxtype'), aim:n.data('aim'), stype:n.data('stype') },
     position:{ x:n.position('x'), y:n.position('y') }
   }));
   const edges=cy.edges().map(e=>({
@@ -1963,8 +2044,10 @@ function applyData(d){
     if(n.data.ntype==='patient') label=patientLabel(n.data.pname,n.data.page,n.data.pdisease,n.data.pgoal);
     else if(n.data.ntype==='care') label=wrapJa((n.data.carekind||'OP')+': '+n.data.base);
     else if(n.data.ntype==='strength') label=strengthLabelText(n.data.base,n.data.stype);
+    else if(STANDALONE_TYPES[n.data.ntype]) label=wrapJa(n.data.base);
     else label=n.data.base;
-    return { group:'nodes', data:{ ...n.data, label, bg:cssVar(m.bgvar), border:m.border }, position:n.position };
+    const col = (n.data.ntype==='info'&&n.data.isbg) ? BG_COLORS() : {bg:cssVar(m.bgvar),border:m.border};
+    return { group:'nodes', data:{ ...n.data, label, bg:col.bg, border:col.border }, position:n.position };
   });
   // 旧形式（原因 ➔ 看護ケア）の線は、新しい向き（看護ケア ➔ 原因）に直して読み込む
   const ntypeOf={}; d.nodes.forEach(n=>{ ntypeOf[n.data.id]=n.data.ntype; });
@@ -2081,16 +2164,16 @@ function buildPrintHTML(){
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>関連図</title><style>
     @page{size:A4 ${portrait?'portrait':'landscape'};margin:10mm}
     *{box-sizing:border-box}
-    body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#23201b;margin:0}
+    body{font-family:"BIZ UDPGothic","BIZ UDPゴシック","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#23201b;margin:0}
     .p1{width:${PW}mm;height:${PH-1}mm;display:flex;flex-direction:column;overflow:hidden}
     .hd{display:flex;align-items:baseline;gap:12px;height:9mm}
-    h1{font-family:"Yu Mincho",serif;font-size:16px;margin:0}.meta{font-size:10px;color:#6b6459}
+    h1{font-family:var(--ud);font-size:16px;margin:0}.meta{font-size:10px;color:#6b6459}
     .fig{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border:1px solid #d8d2c4;border-radius:4px;padding:3mm}
     .fig img{max-width:100%;max-height:100%;object-fit:contain;display:block}
     .lg{height:8mm;font-size:9.5px;color:#6b6459;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
     .p2{break-before:page;page-break-before:always;padding-top:2mm}
     h2{font-size:13px;letter-spacing:.08em;border-bottom:1px solid #d8d2c4;padding-bottom:3px;margin:12px 0 6px}
-    ol.d,ul.c{list-style:none;padding:0;margin:0;font-size:12.5px}ol.d li,ul.c li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:"Yu Mincho",serif;margin-right:6px}ul.c b{color:#7b5aa6;margin-right:6px}
+    ol.d,ul.c{list-style:none;padding:0;margin:0;font-size:12.5px}ol.d li,ul.c li{padding:4px 0;border-bottom:1px solid #eee}ol.d b{color:#3a362f;font-family:var(--ud);margin-right:6px}ul.c b{color:#7b5aa6;margin-right:6px}
     </style></head><body>
     <section class="p1">
       <div class="hd"><h1>関連図</h1><span class="meta">作成日時: ${now}</span></div>
@@ -2143,7 +2226,7 @@ function buildPptx(){
   if(k<KMIN){ k=KMIN; W=Math.min(56,Math.max(W,bb.w*k+2*M)); H=Math.min(56,Math.max(H,bb.h*k+TOP+BOTTOM)); k=Math.min(k,(W-2*M)/bb.w,(H-TOP-BOTTOM)/bb.h); }
   const ox=(W-bb.w*k)/2-bb.x1*k, oy=TOP+((H-TOP-BOTTOM)-bb.h*k)/2-bb.y1*k;
   const X=x=>ox+x*k, Y=y=>oy+y*k, pt=px=>Math.max(6,px*k*72);
-  const FONT='Yu Gothic';
+  const FONT='BIZ UDPGothic';   // Windows標準の「BIZ UDPゴシック」
   const pptx=new PptxGenJS();
   pptx.defineLayout({name:'KANRENZU',width:W,height:H}); pptx.layout='KANRENZU';
   pptx.title='関連図';
@@ -2155,7 +2238,7 @@ function buildPptx(){
     let pts=routes.get(e.id());
     if(!pts||pts.length<2) pts=[e.sourceEndpoint(),...(e.segmentPoints()||[]),e.targetEndpoint()];
     pts=pts.filter(q=>q&&isFinite(q.x)&&isFinite(q.y)); if(pts.length<2) return;
-    const kind=e.data('kind'), care=kind==='care', tee=kind==='threaten';
+    const kind=e.data('kind'), care=kind==='care', tee=kind==='threaten';   // bgrel（関連）は灰色の線（画面の色をそのまま使う）
     const color = care ? '7B5AA6' : pHex(e.style('line-color'));
     const dash=e.hasClass('potential')?'dash':'solid';
     const wPt=care?3.2:Math.max(1.5,(parseFloat(e.style('width'))||2)*0.9);
@@ -2184,12 +2267,14 @@ function buildPptx(){
     const x=X(c.x-w/2), y=Y(c.y-h/2), ww=w*k, hh=h*k;
     const fill=pHex(n.data('bg')||n.style('background-color')), border=pHex(n.data('border')||n.style('border-color'));
     const txt={fontFace:FONT,fontSize:pt(parseFloat(n.style('font-size'))||13),color:'23201B',valign:'middle',margin:Math.max(1,6*k*72),
-      align:(t==='patient'||isInfoNode(n))?'left':'center',bold:t==='diagnosis'};
+      align:(t==='patient'||t==='info')?'left':'center',bold:t==='diagnosis'};
     // PowerPoint では図形の幅で自動で折り返すので、画面用の強制改行は外す（意味のある改行だけ残す）
     const pi=pinfo[n.id()], tg=pi?(pi.role==='S'?'S':'E'+pi.level)+': ':'';
-    const label = isInfoNode(n) ? [tg+n.data('base'),...(n.data('supp')||[]).map(s=>(s.k==='subj'?'主観：':'客観：')+s.t)].join('\n')
+    const label = isBgNode(n) ? ['〔背景〕'+n.data('base'),...(n.data('supp')||[]).map(s=>(s.k==='subj'?'主観：':'客観：')+s.t)].join('\n')
+                : isInfoNode(n) ? [tg+n.data('base'),...(n.data('supp')||[]).map(s=>(s.k==='subj'?'主観：':'客観：')+s.t)].join('\n')
                 : t==='care' ? (n.data('carekind')||'')+': '+n.data('base')
                 : t==='strength' ? '〔'+(ST_TYPES[n.data('stype')]||'本人')+'〕'+n.data('base')
+                : STANDALONE_TYPES[t] ? n.data('base')
                 : String(n.data('label')||'');
     const box={x,y,w:ww,h:hh,fill:{color:fill},line:{color:border,width:1.5}};
     if(t==='diagnosis'){
@@ -2199,8 +2284,12 @@ function buildPptx(){
       sl.addText(label,{...txt,shape:pptx.ShapeType.homePlate,...box});
     }else if(t==='strength'){
       sl.addText(label,{...txt,shape:pptx.ShapeType.octagon,...box});
+    }else if(t==='hope'){
+      sl.addText(label,{...txt,shape:pptx.ShapeType.cloud,...box,line:{color:'8FB0D6',width:1.5},fill:{color:'E4EEF9'}});
+    }else if(t==='ltgoal'){
+      sl.addText(label,{...txt,shape:pptx.ShapeType.roundRect,rectRadius:0.08,...box});
     }else{
-      sl.addText(label,{...txt,shape:t==='patient'?pptx.ShapeType.rect:pptx.ShapeType.roundRect,rectRadius:0.06,...box});
+      sl.addText(label,{...txt,shape:pptx.ShapeType.rect,...box});
     }
   });
   // --- 凡例（画面の凡例の文言をそのまま使う）---
@@ -2235,6 +2324,7 @@ async function exportPptx(){
 }
 document.getElementById('pptxBtn').onclick=exportPptx;
 
+if(document.fonts&&document.fonts.ready){ document.fonts.ready.then(()=>{ cy.style().update(); cy.nodes().forEach(n=>n.data('label',n.data('label'))); scheduleSpread(); }); }
 window.addEventListener('load',()=>{ document.getElementById('nodeText').focus(); setPhase('input'); initAutosave(); });
 
 /* ============================================================
